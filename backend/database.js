@@ -16,6 +16,7 @@ async function getDb() {
   db.run("PRAGMA foreign_keys = ON");
   initSchema();
   seedDefaults();
+  migratePeriodLabels();
   persist();
   return db;
 }
@@ -110,6 +111,33 @@ function seedDefaults() {
 
   const qc = get("SELECT COUNT(*) as c FROM qbo_config");
   if (qc.c === 0) db.run("INSERT INTO qbo_config (id, is_connected) VALUES (1, 0)");
+}
+
+const MONTH_ABBR = { 'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12 };
+const MONTH_SHORT = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function migratePeriodLabels() {
+  const flag = get("SELECT value FROM settings WHERE key='migration_period_labels_v1'");
+  if (flag) return;
+  const periods = all("SELECT id, current_reading_date, year, month FROM billing_periods ORDER BY year ASC, month ASC");
+  // First pass: set year to a temp value to avoid UNIQUE(year, month) conflicts
+  for (const p of periods) {
+    db.run("UPDATE billing_periods SET year = year + 1000 WHERE id = ?", [p.id]);
+  }
+  // Second pass: set correct year, month, label, days
+  for (const p of periods) {
+    if (!p.current_reading_date) continue;
+    const match = p.current_reading_date.match(/^\d{1,2}-([A-Za-z]{3})-(\d{2})$/);
+    if (!match) continue;
+    const newMonth = MONTH_ABBR[match[1]];
+    const newYear = 2000 + parseInt(match[2]);
+    if (!newMonth) continue;
+    const newLabel = `${MONTH_SHORT[newMonth]} ${newYear}`;
+    const newDays = new Date(newYear, newMonth, 0).getDate();
+    db.run("UPDATE billing_periods SET year=?, month=?, billing_month_label=?, days_in_month=? WHERE id=?", [newYear, newMonth, newLabel, newDays, p.id]);
+  }
+  db.run("INSERT OR IGNORE INTO settings (key, value) VALUES ('migration_period_labels_v1', '1')");
+  persist();
 }
 
 module.exports = { getDb, run, get, all, persist };
