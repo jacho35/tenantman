@@ -479,31 +479,18 @@ td .unit-badge {
       <div class="billing-content" id="bcontent1">
         <div class="card">
           <div class="card-title">Create New Billing Period</div>
-          <div class="form-grid cols-4">
-            <div class="form-group">
-              <label>Year</label>
-              <input type="number" id="bp-year" value="2026" min="2020" max="2040">
-            </div>
-            <div class="form-group">
-              <label>Month</label>
-              <select id="bp-month">
-                <option value="1">January</option><option value="2">February</option>
-                <option value="3" selected>March</option><option value="4">April</option>
-                <option value="5">May</option><option value="6">June</option>
-                <option value="7">July</option><option value="8">August</option>
-                <option value="9">September</option><option value="10">October</option>
-                <option value="11">November</option><option value="12">December</option>
-              </select>
-            </div>
+          <div class="form-grid">
             <div class="form-group">
               <label>Prev Reading Date</label>
-              <input type="text" id="bp-prev-date" placeholder="20-Jan-26">
+              <input type="date" id="bp-prev-date">
             </div>
             <div class="form-group">
               <label>Current Reading Date</label>
-              <input type="text" id="bp-curr-date" placeholder="20-Feb-26">
+              <input type="date" id="bp-curr-date">
             </div>
           </div>
+          <input type="hidden" id="bp-year" value="2026">
+          <input type="hidden" id="bp-month" value="3">
           <div class="btn-row">
             <button class="btn btn-primary" onclick="createBillingPeriod()">Create Period</button>
           </div>
@@ -838,6 +825,23 @@ function formatR(n) {
 const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
 
+function dateToDisplay(isoDate) {
+  if (!isoDate) return '';
+  const d = new Date(isoDate + 'T00:00:00');
+  const day = d.getDate();
+  return `${day}-${MONTHS[d.getMonth()+1]}-${String(d.getFullYear()).slice(-2)}`;
+}
+
+function displayToIso(displayDate) {
+  if (!displayDate) return '';
+  const parts = displayDate.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
+  if (!parts) return '';
+  const monthIdx = MONTHS.indexOf(parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase());
+  if (monthIdx < 1) return '';
+  const year = 2000 + parseInt(parts[3]);
+  return `${year}-${String(monthIdx).padStart(2,'0')}-${String(parseInt(parts[1])).padStart(2,'0')}`;
+}
+
 // ===== TENANTS =====
 async function loadTenants() {
   tenants = await api('/tenants');
@@ -1071,6 +1075,14 @@ async function loadBillingPeriods() {
   billingPeriods = await api('/billing-periods');
   tenants = await api('/tenants');
   renderPeriods();
+  // Auto-populate previous reading date from the most recent period's current reading date
+  if (billingPeriods.length > 0) {
+    const lastPeriod = billingPeriods[0]; // sorted DESC by year, month
+    if (lastPeriod.current_reading_date) {
+      const iso = displayToIso(lastPeriod.current_reading_date);
+      if (iso) document.getElementById('bp-prev-date').value = iso;
+    }
+  }
 }
 
 function renderPeriods() {
@@ -1094,20 +1106,27 @@ function renderPeriods() {
 }
 
 async function createBillingPeriod() {
-  const year = parseInt(document.getElementById('bp-year').value);
-  const month = parseInt(document.getElementById('bp-month').value);
-  const label = `${MONTH_NAMES[month]} ${year}`;
-  // For the invoice descriptions, use shortened format like "Mar 2026"
+  const currDateIso = document.getElementById('bp-curr-date').value;
+  // Derive period month/year from the current reading date
+  let year, month;
+  if (currDateIso) {
+    const d = new Date(currDateIso + 'T00:00:00');
+    year = d.getFullYear();
+    month = d.getMonth() + 1;
+  } else {
+    year = parseInt(document.getElementById('bp-year').value);
+    month = parseInt(document.getElementById('bp-month').value);
+  }
   const billingLabel = `${MONTHS[month]} ${year}`;
 
   try {
     const result = await api('/billing-periods', 'POST', {
       year, month,
       billing_month_label: billingLabel,
-      previous_reading_date: document.getElementById('bp-prev-date').value,
-      current_reading_date: document.getElementById('bp-curr-date').value,
+      previous_reading_date: dateToDisplay(document.getElementById('bp-prev-date').value),
+      current_reading_date: dateToDisplay(currDateIso),
     });
-    toast(`Created billing period: ${label} (${result.days_in_month} days)`);
+    toast(`Created billing period: ${billingLabel} (${result.days_in_month} days)`);
     loadBillingPeriods();
   } catch (e) {
     toast(e.message, 'error');
