@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  tenant-invoice-manager:
+    build: .
+    container_name: tenant-invoice-manager
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=3456
+      - NODE_ENV=production
+    networks:
+      - default
+
+networks:
+  default:
+    name: tenant-invoice-manager-net
