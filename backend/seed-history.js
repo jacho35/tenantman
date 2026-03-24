@@ -42,12 +42,13 @@ const history = [
 async function seed() {
   await getDb();
 
-  // Create placeholder tenants if none exist
+  // Create tenants if none exist (data from original QuickBooks invoices)
   let tenants = all("SELECT id, unit_number FROM tenants");
   if (tenants.length === 0) {
-    console.log('No tenants found. Creating placeholder tenants...');
-    run("INSERT INTO tenants (unit_number,name,email,rental_amount,water_meter_id,has_internet,has_electricity,is_placeholder) VALUES (1,'Unit 1 Tenant','tenant1@example.com',0,'WM-001',0,1,1)");
-    run("INSERT INTO tenants (unit_number,name,email,rental_amount,water_meter_id,has_internet,has_electricity,is_placeholder) VALUES (2,'Unit 2 Tenant','tenant2@example.com',0,'WM-002',0,1,1)");
+    console.log('No tenants found. Creating tenants from invoice data...');
+    run("INSERT INTO tenants (unit_number,name,email,billing_address,vat_number,rental_amount,has_internet,has_electricity,is_placeholder) VALUES (1,'Kleenbin Durbanville Central (Pty) Ltd','kleenbin@example.com','22 Duiker Street\nDurbanville 7550','',10715,0,0,0)");
+    run("INSERT INTO tenants (unit_number,name,email,billing_address,vat_number,rental_amount,has_internet,has_electricity,is_placeholder) VALUES (2,'GA7 Concepts (pty) LTD','ga7@example.com','60 De Villiers Ave\nKenridge\nDurbanville 7550','4760315269',13500,1,0,0)");
+    run("INSERT INTO tenants (unit_number,name,email,billing_address,rental_amount,has_internet,has_electricity,is_placeholder) VALUES (3,'Owner (Placeholder)','jacho@rusticworx.co.za','',0,0,0,1)");
     tenants = all("SELECT id, unit_number FROM tenants");
   }
   const unitToId = {};
