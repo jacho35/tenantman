@@ -577,6 +577,13 @@ td .unit-badge {
             <label>Internet Amount (R)</label>
             <input type="number" id="t-internet-amt" step="0.01" value="200">
           </div>
+          <div class="form-group">
+            <label>Utility Invoice Month</label>
+            <select id="t-utility-offset">
+              <option value="0">Current month</option>
+              <option value="1">Next month</option>
+            </select>
+          </div>
         </div>
         <div style="display:flex;gap:20px;margin-top:16px;flex-wrap:wrap">
           <div class="toggle-row">
@@ -876,6 +883,7 @@ async function saveTenant() {
     water_meter_id: document.getElementById('t-water-meter').value,
     elec_meter_id: document.getElementById('t-elec-meter').value,
     internet_amount: parseFloat(document.getElementById('t-internet-amt').value) || 200,
+    utility_month_offset: parseInt(document.getElementById('t-utility-offset').value) || 0,
     has_internet: document.getElementById('t-toggle-internet').classList.contains('on'),
     has_electricity: document.getElementById('t-toggle-elec').classList.contains('on'),
     is_placeholder: document.getElementById('t-toggle-placeholder').classList.contains('on'),
@@ -912,6 +920,7 @@ function editTenant(id) {
   document.getElementById('t-water-meter').value = t.water_meter_id;
   document.getElementById('t-elec-meter').value = t.elec_meter_id;
   document.getElementById('t-internet-amt').value = t.internet_amount;
+  document.getElementById('t-utility-offset').value = t.utility_month_offset || 0;
   document.getElementById('t-toggle-internet').classList.toggle('on', !!t.has_internet);
   document.getElementById('t-toggle-elec').classList.toggle('on', !!t.has_electricity);
   document.getElementById('t-toggle-placeholder').classList.toggle('on', !!t.is_placeholder);
@@ -923,6 +932,7 @@ function clearTenantForm() {
   document.getElementById('tenant-form-title').textContent = 'Add New Tenant';
   ['t-unit','t-name','t-email','t-address','t-vat','t-rental','t-water-meter','t-elec-meter'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('t-internet-amt').value = '200';
+  document.getElementById('t-utility-offset').value = '0';
   ['t-toggle-internet','t-toggle-elec','t-toggle-placeholder'].forEach(id => document.getElementById(id).classList.remove('on'));
 }
 

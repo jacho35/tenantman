@@ -7,14 +7,14 @@ router.get('/tenants', (req, res) => res.json(all("SELECT * FROM tenants WHERE i
 router.get('/tenants/:id', (req, res) => { const t = get("SELECT * FROM tenants WHERE id = ?", [+req.params.id]); t ? res.json(t) : res.status(404).json({ error: 'Not found' }); });
 router.post('/tenants', (req, res) => {
   const b = req.body;
-  const r = run("INSERT INTO tenants (unit_number,name,email,billing_address,vat_number,rental_amount,water_meter_id,elec_meter_id,has_internet,has_electricity,internet_amount,is_placeholder) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-    [b.unit_number, b.name, b.email, b.billing_address||'', b.vat_number||'', b.rental_amount||0, b.water_meter_id||'', b.elec_meter_id||'', b.has_internet?1:0, b.has_electricity?1:0, b.internet_amount||200, b.is_placeholder?1:0]);
+  const r = run("INSERT INTO tenants (unit_number,name,email,billing_address,vat_number,rental_amount,water_meter_id,elec_meter_id,has_internet,has_electricity,internet_amount,utility_month_offset,is_placeholder) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    [b.unit_number, b.name, b.email, b.billing_address||'', b.vat_number||'', b.rental_amount||0, b.water_meter_id||'', b.elec_meter_id||'', b.has_internet?1:0, b.has_electricity?1:0, b.internet_amount||200, b.utility_month_offset||0, b.is_placeholder?1:0]);
   res.json({ id: r.lastInsertRowid, message: 'Tenant created' });
 });
 router.put('/tenants/:id', (req, res) => {
   const b = req.body;
-  run("UPDATE tenants SET unit_number=?,name=?,email=?,billing_address=?,vat_number=?,rental_amount=?,water_meter_id=?,elec_meter_id=?,has_internet=?,has_electricity=?,internet_amount=?,is_placeholder=?,updated_at=datetime('now') WHERE id=?",
-    [b.unit_number, b.name, b.email, b.billing_address||'', b.vat_number||'', b.rental_amount||0, b.water_meter_id||'', b.elec_meter_id||'', b.has_internet?1:0, b.has_electricity?1:0, b.internet_amount||200, b.is_placeholder?1:0, +req.params.id]);
+  run("UPDATE tenants SET unit_number=?,name=?,email=?,billing_address=?,vat_number=?,rental_amount=?,water_meter_id=?,elec_meter_id=?,has_internet=?,has_electricity=?,internet_amount=?,utility_month_offset=?,is_placeholder=?,updated_at=datetime('now') WHERE id=?",
+    [b.unit_number, b.name, b.email, b.billing_address||'', b.vat_number||'', b.rental_amount||0, b.water_meter_id||'', b.elec_meter_id||'', b.has_internet?1:0, b.has_electricity?1:0, b.internet_amount||200, b.utility_month_offset||0, b.is_placeholder?1:0, +req.params.id]);
   res.json({ message: 'Tenant updated' });
 });
 router.delete('/tenants/:id', (req, res) => { run("UPDATE tenants SET is_active=0,updated_at=datetime('now') WHERE id=?", [+req.params.id]); res.json({ message: 'Tenant deactivated' }); });

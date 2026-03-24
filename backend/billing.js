@@ -38,15 +38,23 @@ function generateLineItems(tenantId, billingPeriodId) {
   const lines = [];
   let order = 1;
 
+  // Compute utility month label with per-tenant offset (0 = current month, 1 = next month)
+  const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const offset = tenant.utility_month_offset || 0;
+  let utilMonth = period.month - 1 + offset; // 0-based
+  let utilYear = period.year;
+  if (utilMonth > 11) { utilMonth -= 12; utilYear++; }
+  const utilLabel = `${MONTH_SHORT[utilMonth]} ${utilYear}`;
+
   if (tenant.rental_amount > 0 && !tenant.is_placeholder) {
     lines.push({ line_order: order++, activity: '35 Stillewater Rental', description: `${propertyAddress} - Unit ${tenant.unit_number} Rental ${period.billing_month_label}`, tax_type: 'Standard', qty: 1, rate: tenant.rental_amount, amount: tenant.rental_amount });
   }
 
   const waterFixed = fixedCharges.find(c => c.charge_type === 'water_fixed');
-  if (waterFixed) lines.push({ line_order: order++, activity: 'Utilities Income', description: `Water Fixed Charge - ${period.billing_month_label}`, tax_type: 'Standard', qty: 1, rate: waterFixed.amount_fixed, amount: waterFixed.amount_fixed });
+  if (waterFixed) lines.push({ line_order: order++, activity: 'Utilities Income', description: `Water Fixed Charge - ${utilLabel}`, tax_type: 'Standard', qty: 1, rate: waterFixed.amount_fixed, amount: waterFixed.amount_fixed });
 
   const refuse = fixedCharges.find(c => c.charge_type === 'refuse');
-  if (refuse) lines.push({ line_order: order++, activity: 'Utilities Income', description: `Refuse Collection Fixed Charge - ${period.billing_month_label}`, tax_type: 'Standard', qty: 1, rate: refuse.amount_fixed, amount: refuse.amount_fixed });
+  if (refuse) lines.push({ line_order: order++, activity: 'Utilities Income', description: `Refuse Collection Fixed Charge - ${utilLabel}`, tax_type: 'Standard', qty: 1, rate: refuse.amount_fixed, amount: refuse.amount_fixed });
 
   const waterReading = get("SELECT * FROM meter_readings WHERE billing_period_id = ? AND tenant_id = ? AND meter_type = 'water'", [billingPeriodId, tenantId]);
   if (waterReading) {
@@ -62,14 +70,14 @@ function generateLineItems(tenantId, billingPeriodId) {
       const perUnit = charge.amount_per_day / charge.split_by_units;
       const perUnitRounded = parseFloat(perUnit.toFixed(7));
       const totalAmount = parseFloat((perUnit * period.days_in_month).toFixed(2));
-      lines.push({ line_order: order++, activity: 'Utilities Income', description: `${charge.description} / ${charge.split_by_units} units - ${period.billing_month_label}`, tax_type: 'Standard', qty: period.days_in_month, rate: perUnitRounded, amount: totalAmount });
+      lines.push({ line_order: order++, activity: 'Utilities Income', description: `${charge.description} / ${charge.split_by_units} units - ${utilLabel}`, tax_type: 'Standard', qty: period.days_in_month, rate: perUnitRounded, amount: totalAmount });
     }
   }
 
   if (tenant.has_electricity) {
     const elecReading = get("SELECT * FROM meter_readings WHERE billing_period_id = ? AND tenant_id = ? AND meter_type = 'electricity'", [billingPeriodId, tenantId]);
     if (elecReading && elecReading.calculated_amount) {
-      lines.push({ line_order: order++, activity: 'Utilities Income', description: `Electricity Units Used ${elecReading.usage_kl}kWh - ${period.billing_month_label}`, tax_type: 'Standard', qty: elecReading.usage_kl, rate: elecReading.calculated_amount / elecReading.usage_kl, amount: elecReading.calculated_amount });
+      lines.push({ line_order: order++, activity: 'Utilities Income', description: `Electricity Units Used ${elecReading.usage_kl}kWh - ${utilLabel}`, tax_type: 'Standard', qty: elecReading.usage_kl, rate: elecReading.calculated_amount / elecReading.usage_kl, amount: elecReading.calculated_amount });
     }
   }
 
