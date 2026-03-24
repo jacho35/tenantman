@@ -46,8 +46,14 @@ function generateLineItems(tenantId, billingPeriodId) {
   if (utilMonth > 11) { utilMonth -= 12; utilYear++; }
   const utilLabel = `${MONTH_SHORT[utilMonth]} ${utilYear}`;
 
+  // Rental is always charged in advance (next month)
+  let rentalMonth = period.month; // 0-based
+  let rentalYear = period.year;
+  if (rentalMonth > 11) { rentalMonth -= 12; rentalYear++; }
+  const rentalLabel = `${MONTH_SHORT[rentalMonth]} ${rentalYear}`;
+
   if (tenant.rental_amount > 0 && !tenant.is_placeholder) {
-    lines.push({ line_order: order++, activity: '35 Stillewater Rental', description: `${propertyAddress} - Unit ${tenant.unit_number} Rental ${period.billing_month_label}`, tax_type: 'Standard', qty: 1, rate: tenant.rental_amount, amount: tenant.rental_amount });
+    lines.push({ line_order: order++, activity: '35 Stillewater Rental', description: `${propertyAddress} - Unit ${tenant.unit_number} Rental ${rentalLabel}`, tax_type: 'Standard', qty: 1, rate: tenant.rental_amount, amount: tenant.rental_amount });
   }
 
   const waterFixed = fixedCharges.find(c => c.charge_type === 'water_fixed');
