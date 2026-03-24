@@ -42,11 +42,13 @@ const history = [
 async function seed() {
   await getDb();
 
-  // Check tenants exist
-  const tenants = all("SELECT id, unit_number FROM tenants");
+  // Create placeholder tenants if none exist
+  let tenants = all("SELECT id, unit_number FROM tenants");
   if (tenants.length === 0) {
-    console.log('No tenants found. Please create tenants first (run the app and add them via UI).');
-    process.exit(1);
+    console.log('No tenants found. Creating placeholder tenants...');
+    run("INSERT INTO tenants (unit_number,name,email,rental_amount,water_meter_id,has_internet,has_electricity,is_placeholder) VALUES (1,'Unit 1 Tenant','tenant1@example.com',0,'WM-001',0,1,1)");
+    run("INSERT INTO tenants (unit_number,name,email,rental_amount,water_meter_id,has_internet,has_electricity,is_placeholder) VALUES (2,'Unit 2 Tenant','tenant2@example.com',0,'WM-002',0,1,1)");
+    tenants = all("SELECT id, unit_number FROM tenants");
   }
   const unitToId = {};
   tenants.forEach(t => unitToId[t.unit_number] = t.id);
