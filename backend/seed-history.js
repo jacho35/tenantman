@@ -13,40 +13,42 @@ const MONTH_MAP = {
 // Historical invoices extracted from QB Sales by Customer Type Detail report
 // Each entry is one invoice with water reading and ESKOM days
 const history = [
-  { inv: 1077, unit: 1, label: 'Apr 2025', prevR: 125182, currR: 127753, kl: 2.571, prevDate: '19-Feb-25', currDate: '24-Mar-25', days: 31 },
-  { inv: 1078, unit: 2, label: 'Apr 2025', prevR: 8574,   currR: 9131,   kl: 0.557, prevDate: '19-Feb-25', currDate: '24-Mar-25', days: 31 },
-  { inv: 1080, unit: 2, label: 'May 2025', prevR: 9131,   currR: 9676,   kl: 0.545, prevDate: '24-Mar-25', currDate: '24-Apr-25', days: 31 },
-  { inv: 1081, unit: 1, label: 'May 2025', prevR: 127753, currR: 129657, kl: 1.904, prevDate: '24-Mar-25', currDate: '24-Apr-25', days: 30 },
-  { inv: 1083, unit: 2, label: 'Jun 2025', prevR: 9676,   currR: 10982,  kl: 1.306, prevDate: '24-Apr-25', currDate: '27-May-25', days: 30 },
-  { inv: 1084, unit: 1, label: 'Jun 2025', prevR: 129657, currR: 131630, kl: 1.973, prevDate: '24-Apr-25', currDate: '27-May-25', days: 31 },
-  { inv: 1086, unit: 2, label: 'Jul 2025', prevR: 10982,  currR: 11896,  kl: 0.914, prevDate: '27-May-25', currDate: '26-Jun-25', days: 31 },
-  { inv: 1087, unit: 1, label: 'Jul 2025', prevR: 131630, currR: 133754, kl: 2.124, prevDate: '27-May-25', currDate: '26-Jun-25', days: 30 },
-  { inv: 1088, unit: 1, label: 'Aug 2025', prevR: 133754, currR: 134690, kl: 0.936, prevDate: '26-Jun-25', currDate: '24-Jul-25', days: 31 },
-  { inv: 1089, unit: 2, label: 'Aug 2025', prevR: 11896,  currR: 12987,  kl: 1.091, prevDate: '26-Jun-25', currDate: '24-Jul-25', days: 31 },
-  { inv: 1090, unit: 2, label: 'Sep 2025', prevR: 12987,  currR: 14083,  kl: 1.096, prevDate: '24-Jul-25', currDate: '27-Aug-25', days: 30 },
-  { inv: 1091, unit: 1, label: 'Sep 2025', prevR: 134690, currR: 137314, kl: 2.624, prevDate: '24-Jul-25', currDate: '27-Aug-25', days: 31 },
-  { inv: 1092, unit: 1, label: 'Oct 2025', prevR: 137314, currR: 139710, kl: 2.396, prevDate: '27-Aug-25', currDate: '26-Sep-25', days: 31 },
-  { inv: 1093, unit: 2, label: 'Oct 2025', prevR: 14083,  currR: 15422,  kl: 1.339, prevDate: '27-Aug-25', currDate: '26-Sep-25', days: 30 },
-  { inv: 1094, unit: 2, label: 'Nov 2025', prevR: 15422,  currR: 16093,  kl: 0.671, prevDate: '26-Sep-25', currDate: '25-Oct-25', days: 30 },
-  { inv: 1095, unit: 1, label: 'Nov 2025', prevR: 139710, currR: 141453, kl: 1.743, prevDate: '26-Sep-25', currDate: '25-Oct-25', days: 31 },
-  { inv: 1096, unit: 1, label: 'Dec 2025', prevR: 141453, currR: 143281, kl: 1.828, prevDate: '25-Oct-25', currDate: '24-Nov-25', days: 30 },
-  { inv: 1097, unit: 2, label: 'Dec 2025', prevR: 16093,  currR: 17604,  kl: 1.511, prevDate: '25-Oct-25', currDate: '24-Nov-25', days: 31 },
-  { inv: 1098, unit: 1, label: 'Jan 2026', prevR: 143281, currR: 144599, kl: 1.318, prevDate: '24-Nov-25', currDate: '17-Dec-25', days: 31 },
-  { inv: 1099, unit: 2, label: 'Jan 2026', prevR: 17604,  currR: 18820,  kl: 1.216, prevDate: '24-Nov-25', currDate: '17-Dec-25', days: 31 },
-  { inv: 1100, unit: 1, label: 'Feb 2026', prevR: 144599, currR: 145951, kl: 1.352, prevDate: '17-Dec-25', currDate: '20-Jan-26', days: 31 },
-  { inv: 1101, unit: 2, label: 'Feb 2026', prevR: 18820,  currR: 19193,  kl: 0.373, prevDate: '17-Dec-25', currDate: '20-Jan-26', days: 28 },
-  { inv: 1102, unit: 2, label: 'Mar 2026', prevR: 19193,  currR: 20451,  kl: 1.258, prevDate: '20-Jan-26', currDate: '20-Feb-26', days: 31 },
-  { inv: 1103, unit: 1, label: 'Mar 2026', prevR: 145951, currR: 147637, kl: 1.686, prevDate: '20-Jan-26', currDate: '20-Feb-26', days: 28 },
+  { inv: 1077, unit: 1, label: 'Mar 2025', prevR: 125182, currR: 127753, kl: 2.571, prevDate: '19-Feb-25', currDate: '24-Mar-25', days: 31 },
+  { inv: 1078, unit: 2, label: 'Mar 2025', prevR: 8574,   currR: 9131,   kl: 0.557, prevDate: '19-Feb-25', currDate: '24-Mar-25', days: 31 },
+  { inv: 1080, unit: 2, label: 'Apr 2025', prevR: 9131,   currR: 9676,   kl: 0.545, prevDate: '24-Mar-25', currDate: '24-Apr-25', days: 30 },
+  { inv: 1081, unit: 1, label: 'Apr 2025', prevR: 127753, currR: 129657, kl: 1.904, prevDate: '24-Mar-25', currDate: '24-Apr-25', days: 30 },
+  { inv: 1083, unit: 2, label: 'May 2025', prevR: 9676,   currR: 10982,  kl: 1.306, prevDate: '24-Apr-25', currDate: '27-May-25', days: 31 },
+  { inv: 1084, unit: 1, label: 'May 2025', prevR: 129657, currR: 131630, kl: 1.973, prevDate: '24-Apr-25', currDate: '27-May-25', days: 31 },
+  { inv: 1086, unit: 2, label: 'Jun 2025', prevR: 10982,  currR: 11896,  kl: 0.914, prevDate: '27-May-25', currDate: '26-Jun-25', days: 30 },
+  { inv: 1087, unit: 1, label: 'Jun 2025', prevR: 131630, currR: 133754, kl: 2.124, prevDate: '27-May-25', currDate: '26-Jun-25', days: 30 },
+  { inv: 1088, unit: 1, label: 'Jul 2025', prevR: 133754, currR: 134690, kl: 0.936, prevDate: '26-Jun-25', currDate: '24-Jul-25', days: 31 },
+  { inv: 1089, unit: 2, label: 'Jul 2025', prevR: 11896,  currR: 12987,  kl: 1.091, prevDate: '26-Jun-25', currDate: '24-Jul-25', days: 31 },
+  { inv: 1090, unit: 2, label: 'Aug 2025', prevR: 12987,  currR: 14083,  kl: 1.096, prevDate: '24-Jul-25', currDate: '27-Aug-25', days: 31 },
+  { inv: 1091, unit: 1, label: 'Aug 2025', prevR: 134690, currR: 137314, kl: 2.624, prevDate: '24-Jul-25', currDate: '27-Aug-25', days: 31 },
+  { inv: 1092, unit: 1, label: 'Sep 2025', prevR: 137314, currR: 139710, kl: 2.396, prevDate: '27-Aug-25', currDate: '26-Sep-25', days: 30 },
+  { inv: 1093, unit: 2, label: 'Sep 2025', prevR: 14083,  currR: 15422,  kl: 1.339, prevDate: '27-Aug-25', currDate: '26-Sep-25', days: 30 },
+  { inv: 1094, unit: 2, label: 'Oct 2025', prevR: 15422,  currR: 16093,  kl: 0.671, prevDate: '26-Sep-25', currDate: '25-Oct-25', days: 31 },
+  { inv: 1095, unit: 1, label: 'Oct 2025', prevR: 139710, currR: 141453, kl: 1.743, prevDate: '26-Sep-25', currDate: '25-Oct-25', days: 31 },
+  { inv: 1096, unit: 1, label: 'Nov 2025', prevR: 141453, currR: 143281, kl: 1.828, prevDate: '25-Oct-25', currDate: '24-Nov-25', days: 30 },
+  { inv: 1097, unit: 2, label: 'Nov 2025', prevR: 16093,  currR: 17604,  kl: 1.511, prevDate: '25-Oct-25', currDate: '24-Nov-25', days: 30 },
+  { inv: 1098, unit: 1, label: 'Dec 2025', prevR: 143281, currR: 144599, kl: 1.318, prevDate: '24-Nov-25', currDate: '17-Dec-25', days: 31 },
+  { inv: 1099, unit: 2, label: 'Dec 2025', prevR: 17604,  currR: 18820,  kl: 1.216, prevDate: '24-Nov-25', currDate: '17-Dec-25', days: 31 },
+  { inv: 1100, unit: 1, label: 'Jan 2026', prevR: 144599, currR: 145951, kl: 1.352, prevDate: '17-Dec-25', currDate: '20-Jan-26', days: 31 },
+  { inv: 1101, unit: 2, label: 'Jan 2026', prevR: 18820,  currR: 19193,  kl: 0.373, prevDate: '17-Dec-25', currDate: '20-Jan-26', days: 31 },
+  { inv: 1102, unit: 2, label: 'Feb 2026', prevR: 19193,  currR: 20451,  kl: 1.258, prevDate: '20-Jan-26', currDate: '20-Feb-26', days: 28 },
+  { inv: 1103, unit: 1, label: 'Feb 2026', prevR: 145951, currR: 147637, kl: 1.686, prevDate: '20-Jan-26', currDate: '20-Feb-26', days: 28 },
 ];
 
 async function seed() {
   await getDb();
 
-  // Check tenants exist
-  const tenants = all("SELECT id, unit_number FROM tenants");
+  // Create placeholder tenants if none exist
+  let tenants = all("SELECT id, unit_number FROM tenants");
   if (tenants.length === 0) {
-    console.log('No tenants found. Please create tenants first (run the app and add them via UI).');
-    process.exit(1);
+    console.log('No tenants found. Creating placeholder tenants...');
+    run("INSERT INTO tenants (unit_number,name,email,rental_amount,water_meter_id,has_internet,has_electricity,is_placeholder) VALUES (1,'Unit 1 Tenant','tenant1@example.com',0,'WM-001',0,1,1)");
+    run("INSERT INTO tenants (unit_number,name,email,rental_amount,water_meter_id,has_internet,has_electricity,is_placeholder) VALUES (2,'Unit 2 Tenant','tenant2@example.com',0,'WM-002',0,1,1)");
+    tenants = all("SELECT id, unit_number FROM tenants");
   }
   const unitToId = {};
   tenants.forEach(t => unitToId[t.unit_number] = t.id);
