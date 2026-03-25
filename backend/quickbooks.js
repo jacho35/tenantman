@@ -240,15 +240,35 @@ function buildQboInvoice(customer, lineItems, period, tenant) {
   const settings_data = {};
   all("SELECT * FROM settings").forEach(r => settings_data[r.key] = r.value);
 
-  const lines = lineItems.map((item, idx) => ({
-    DetailType: 'SalesItemLineDetail',
-    Amount: parseFloat(item.amount.toFixed(2)),
-    Description: item.description.replace(/\n/g, ', '),
-    SalesItemLineDetail: {
-      UnitPrice: parseFloat(item.rate.toFixed(2)),
-      Qty: item.qty,
-    },
-  }));
+  const lines = lineItems.map((item, idx) => {
+    const amount = parseFloat(item.amount.toFixed(2));
+    const qty = item.qty;
+    // QBO requires Amount == UnitPrice * Qty exactly
+    // Recalculate UnitPrice from amount/qty to avoid rounding mismatch
+    const unitPrice = qty !== 0 ? parseFloat((amount / qty).toFixed(2)) : amount;
+    const calcAmount = parseFloat((unitPrice * qty).toFixed(2));
+    // If there's still a rounding difference, use qty=1 with amount as unit price
+    if (calcAmount !== amount) {
+      return {
+        DetailType: 'SalesItemLineDetail',
+        Amount: amount,
+        Description: item.description.replace(/\n/g, ', '),
+        SalesItemLineDetail: {
+          UnitPrice: amount,
+          Qty: 1,
+        },
+      };
+    }
+    return {
+      DetailType: 'SalesItemLineDetail',
+      Amount: amount,
+      Description: item.description.replace(/\n/g, ', '),
+      SalesItemLineDetail: {
+        UnitPrice: unitPrice,
+        Qty: qty,
+      },
+    };
+  });
 
   const invoice = {
     CustomerRef: { value: customer.Id },
