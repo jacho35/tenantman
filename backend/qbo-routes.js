@@ -61,19 +61,54 @@ router.get('/auth-url', (req, res) => {
 // GET /api/qbo/callback - OAuth2 callback handler
 router.get('/callback', async (req, res) => {
   const { code, realmId, state, error } = req.query;
+  console.log('[QBO Callback] Received:', { code: code ? 'present' : 'missing', realmId, state, error: error || 'none' });
+
   if (error) {
-    return res.send(`<html><body><h2>QuickBooks Authorization Failed</h2><p>${error}</p><script>window.opener && window.opener.postMessage({type:'qbo_auth',success:false,error:'${error}'},'*');setTimeout(()=>window.close(),3000);</script></body></html>`);
+    console.error('[QBO Callback] Auth error from Intuit:', error);
+    return res.send(callbackPage(false, `Authorization denied: ${error}`));
   }
   if (!code || !realmId) {
-    return res.status(400).send('<html><body><h2>Missing authorization code or realm ID</h2></body></html>');
+    console.error('[QBO Callback] Missing code or realmId');
+    return res.status(400).send(callbackPage(false, 'Missing authorization code or realm ID'));
   }
   try {
     await qbo.exchangeCodeForTokens(code, realmId);
-    res.send(`<html><body style="font-family:sans-serif;background:#0f1119;color:#e8eaf6;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2 style="color:#00e676">Connected to QuickBooks!</h2><p>You can close this window.</p></div><script>window.opener && window.opener.postMessage({type:'qbo_auth',success:true},'*');setTimeout(()=>window.close(),2000);</script></body></html>`);
+    console.log('[QBO Callback] Token exchange successful, realm:', realmId);
+    res.send(callbackPage(true, 'Connected to QuickBooks!'));
   } catch (e) {
-    res.status(500).send(`<html><body style="font-family:sans-serif;background:#0f1119;color:#e8eaf6;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2 style="color:#ff5252">Connection Failed</h2><p>${e.message}</p></div></body></html>`);
+    console.error('[QBO Callback] Token exchange failed:', e.message);
+    res.status(500).send(callbackPage(false, e.message));
   }
 });
+
+function callbackPage(success, message) {
+  const color = success ? '#00e676' : '#ff5252';
+  const title = success ? 'Connected to QuickBooks!' : 'Connection Failed';
+  // Try postMessage to opener (popup flow), then redirect to settings (same-tab flow)
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QuickBooks ${success ? 'Connected' : 'Error'}</title></head>
+<body style="font-family:sans-serif;background:#0f1119;color:#e8eaf6;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+<div style="text-align:center;max-width:500px;padding:20px">
+  <h2 style="color:${color}">${title}</h2>
+  <p style="color:#9fa8da">${message}</p>
+  <p style="color:#5c6bc0;font-size:13px;margin-top:20px" id="redirect-msg"></p>
+</div>
+<script>
+  var sent = false;
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({type:'qbo_auth',success:${success},error:${JSON.stringify(success ? '' : message)}},'*');
+      sent = true;
+      document.getElementById('redirect-msg').textContent = 'You can close this window.';
+      ${success ? "setTimeout(function(){window.close()},2000);" : ""}
+    }
+  } catch(e) {}
+  if (!sent) {
+    document.getElementById('redirect-msg').textContent = 'Redirecting back to settings...';
+    setTimeout(function(){ window.location.href = '/#settings'; },${success ? 2000 : 5000});
+  }
+</script>
+</body></html>`;
+}
 
 // POST /api/qbo/disconnect - Disconnect from QBO
 router.post('/disconnect', (req, res) => {

@@ -1355,6 +1355,12 @@ async function generateAllInvoices() {
 // ===== QUICKBOOKS =====
 let qboStatus = { is_connected: false, has_credentials: false };
 
+// Handle redirect back from OAuth (same-tab flow)
+if (window.location.hash === '#settings') {
+  window.location.hash = '';
+  setTimeout(() => switchPage('settings'), 100);
+}
+
 async function loadQboStatus() {
   try {
     qboStatus = await api('/qbo/status');
@@ -1427,19 +1433,37 @@ async function connectQbo() {
     const { url } = await api('/qbo/auth-url');
     // Open OAuth popup
     const popup = window.open(url, 'qbo_auth', 'width=600,height=700,scrollbars=yes');
-    // Listen for completion message
+
+    // Listen for completion message from popup
     window.addEventListener('message', function handler(event) {
       if (event.data?.type === 'qbo_auth') {
         window.removeEventListener('message', handler);
         if (event.data.success) {
           toast('Connected to QuickBooks!');
-          loadQboConfig();
-          loadQboStatus();
         } else {
-          toast('QuickBooks authorization failed', 'error');
+          toast('QuickBooks: ' + (event.data.error || 'authorization failed'), 'error');
         }
+        loadQboConfig();
+        loadQboStatus();
       }
     });
+
+    // Also poll for connection in case postMessage doesn't work (popup blockers, same-tab redirect)
+    if (!popup || popup.closed) {
+      toast('Popup blocked — redirecting to QuickBooks auth...', 'warning');
+      window.location.href = url;
+      return;
+    }
+    const pollInterval = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollInterval);
+        // Popup closed — refresh status in case OAuth completed
+        loadQboConfig();
+        loadQboStatus();
+      }
+    }, 1000);
+    // Stop polling after 5 minutes
+    setTimeout(() => clearInterval(pollInterval), 300000);
   } catch (e) {
     toast(e.message, 'error');
   }
