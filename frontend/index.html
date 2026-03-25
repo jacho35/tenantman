@@ -713,13 +713,31 @@ td .unit-badge {
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title">QuickBooks Online <span class="badge badge-warning">Phase 2</span></div>
-        <p style="color:var(--text-secondary);font-size:13px">
-          QuickBooks API integration will be added in Phase 2. You'll need to create a developer app at
+      <div class="card" id="qbo-settings-card">
+        <div class="card-title">QuickBooks Online</div>
+        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">
+          Connect to QuickBooks Online to push invoices directly. Create a developer app at
           <a href="https://developer.intuit.com" target="_blank" style="color:var(--accent)">developer.intuit.com</a>
-          and enter your credentials here.
+          and enter your OAuth2 credentials below.
         </p>
+        <div class="form-grid">
+          <div class="form-group"><label>Client ID</label><input type="text" id="qbo-client-id" placeholder="Your OAuth2 Client ID"></div>
+          <div class="form-group"><label>Client Secret</label><input type="password" id="qbo-client-secret" placeholder="••••••••"></div>
+          <div class="form-group"><label>Redirect URI</label><input type="text" id="qbo-redirect-uri" placeholder="http://localhost:3456/api/qbo/callback"></div>
+          <div class="form-group">
+            <label>Environment</label>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+              <div class="toggle" id="qbo-toggle-sandbox" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+              <span style="font-size:13px;color:var(--text-secondary)">Sandbox mode</span>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-primary" onclick="saveQboConfig()">Save QBO Settings</button>
+          <button class="btn btn-success" id="qbo-connect-btn" onclick="connectQbo()" style="display:none">Connect to QuickBooks</button>
+          <button class="btn btn-danger" id="qbo-disconnect-btn" onclick="disconnectQbo()" style="display:none">Disconnect</button>
+        </div>
+        <div id="qbo-connection-status" style="margin-top:12px;font-size:12px;color:var(--text-muted)"></div>
       </div>
     </div>
 
@@ -1057,6 +1075,7 @@ async function loadSettings() {
   document.getElementById('s-bank-account').value = settings.bank_account || '';
   document.getElementById('s-bank-branch').value = settings.bank_branch || '';
   document.getElementById('s-bank-branch-code').value = settings.bank_branch_code || '';
+  loadQboConfig();
 }
 
 async function saveSettings() {
@@ -1319,9 +1338,170 @@ async function generateAllInvoices() {
     document.getElementById('generation-results').innerHTML = html;
     toast(`Generated invoices for ${results.filter(r => !r.error).length} tenants`);
 
-    // Also prepare the review step
+    // Also prepare the review step with push-to-QBO buttons
     document.getElementById('review-container').innerHTML = html +
-      `<div class="btn-row"><button class="btn btn-success">🔗 Push to QuickBooks (Phase 2)</button></div>`;
+      `<div id="qbo-push-section" style="display:none">
+        <div class="btn-row">
+          <button class="btn btn-success" onclick="pushAllToQbo()">Push All to QuickBooks</button>
+        </div>
+        <div id="qbo-push-results" style="margin-top:12px"></div>
+      </div>`;
+    updateQboPushSection();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ===== QUICKBOOKS =====
+let qboStatus = { is_connected: false, has_credentials: false };
+
+async function loadQboStatus() {
+  try {
+    qboStatus = await api('/qbo/status');
+    const dot = document.getElementById('qboDot');
+    const label = document.getElementById('qboLabel');
+    if (qboStatus.is_connected) {
+      dot.classList.add('connected');
+      label.textContent = 'QuickBooks: Connected';
+    } else {
+      dot.classList.remove('connected');
+      label.textContent = 'QuickBooks: Not connected';
+    }
+  } catch (e) {
+    console.error('QBO status error:', e);
+  }
+}
+
+async function loadQboConfig() {
+  try {
+    const config = await api('/qbo/config');
+    document.getElementById('qbo-client-id').value = config.client_id || '';
+    document.getElementById('qbo-client-secret').placeholder = config.has_secret ? '••••••••  (saved)' : '••••••••';
+    document.getElementById('qbo-redirect-uri').value = config.redirect_uri || '';
+    if (config.use_sandbox) document.getElementById('qbo-toggle-sandbox').classList.add('on');
+    else document.getElementById('qbo-toggle-sandbox').classList.remove('on');
+
+    const connectBtn = document.getElementById('qbo-connect-btn');
+    const disconnectBtn = document.getElementById('qbo-disconnect-btn');
+    const statusEl = document.getElementById('qbo-connection-status');
+
+    if (config.is_connected) {
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = '';
+      statusEl.innerHTML = `<span style="color:var(--success)">Connected</span> — Realm ID: ${config.realm_id}`;
+    } else if (config.client_id && config.has_secret) {
+      connectBtn.style.display = '';
+      disconnectBtn.style.display = 'none';
+      statusEl.textContent = 'Credentials saved. Click "Connect to QuickBooks" to authorize.';
+    } else {
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'none';
+      statusEl.textContent = 'Enter your Client ID and Secret to get started.';
+    }
+  } catch (e) {
+    console.error('QBO config error:', e);
+  }
+}
+
+async function saveQboConfig() {
+  const data = {
+    client_id: document.getElementById('qbo-client-id').value.trim(),
+    client_secret: document.getElementById('qbo-client-secret').value.trim(),
+    redirect_uri: document.getElementById('qbo-redirect-uri').value.trim(),
+    use_sandbox: document.getElementById('qbo-toggle-sandbox').classList.contains('on'),
+  };
+  // Don't send empty secret (keep existing)
+  if (!data.client_secret) delete data.client_secret;
+  try {
+    await api('/qbo/config', 'PUT', data);
+    toast('QuickBooks settings saved');
+    loadQboConfig();
+    loadQboStatus();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function connectQbo() {
+  try {
+    const { url } = await api('/qbo/auth-url');
+    // Open OAuth popup
+    const popup = window.open(url, 'qbo_auth', 'width=600,height=700,scrollbars=yes');
+    // Listen for completion message
+    window.addEventListener('message', function handler(event) {
+      if (event.data?.type === 'qbo_auth') {
+        window.removeEventListener('message', handler);
+        if (event.data.success) {
+          toast('Connected to QuickBooks!');
+          loadQboConfig();
+          loadQboStatus();
+        } else {
+          toast('QuickBooks authorization failed', 'error');
+        }
+      }
+    });
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function disconnectQbo() {
+  if (!confirm('Disconnect from QuickBooks Online?')) return;
+  try {
+    await api('/qbo/disconnect', 'POST');
+    toast('Disconnected from QuickBooks');
+    loadQboConfig();
+    loadQboStatus();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function updateQboPushSection() {
+  const section = document.getElementById('qbo-push-section');
+  if (section && qboStatus.is_connected) {
+    section.style.display = 'block';
+    loadPushStatuses();
+  }
+}
+
+async function loadPushStatuses() {
+  if (!selectedPeriodId) return;
+  try {
+    const statuses = await api(`/qbo/push-status/${selectedPeriodId}`);
+    const resultsEl = document.getElementById('qbo-push-results');
+    if (!resultsEl) return;
+    if (!statuses.length) {
+      resultsEl.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No invoices pushed yet for this period.</p>';
+      return;
+    }
+    resultsEl.innerHTML = statuses.map(s => {
+      const badge = s.status === 'pushed'
+        ? `<span class="badge badge-success">Pushed</span> QBO #${s.qbo_doc_number || s.qbo_invoice_id}`
+        : `<span class="badge badge-danger">Failed</span> ${s.error_message || ''}`;
+      return `<div style="padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)">
+        Unit ${s.unit_number} — ${s.tenant_name}: ${badge}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.error('Push status error:', e);
+  }
+}
+
+async function pushAllToQbo() {
+  if (!selectedPeriodId) { toast('No billing period selected', 'error'); return; }
+  if (!confirm('Push all invoices for this period to QuickBooks?')) return;
+  try {
+    toast('Pushing invoices to QuickBooks...');
+    const results = await api(`/qbo/push-all/${selectedPeriodId}`, 'POST');
+    const pushed = results.filter(r => r.status === 'pushed').length;
+    const failed = results.filter(r => r.status === 'failed').length;
+    if (failed > 0) {
+      toast(`Pushed ${pushed}, failed ${failed}`, 'warning');
+    } else {
+      toast(`All ${pushed} invoices pushed to QuickBooks`);
+    }
+    loadPushStatuses();
   } catch (e) {
     toast(e.message, 'error');
   }
@@ -1333,6 +1513,7 @@ async function init() {
     tenants = await api('/tenants');
     settings = await api('/settings');
     loadBillingPeriods();
+    loadQboStatus();
   } catch(e) {
     console.error('Init error:', e);
   }

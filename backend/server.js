@@ -11,6 +11,7 @@ async function start() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.static(path.join(__dirname, '..', 'frontend')));
   app.use('/api', require('./routes'));
+  app.use('/api/qbo', require('./qbo-routes'));
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
   });

@@ -63,9 +63,16 @@ function initSchema() {
     CREATE TABLE IF NOT EXISTS meter_readings (id INTEGER PRIMARY KEY AUTOINCREMENT, billing_period_id INTEGER NOT NULL, tenant_id INTEGER NOT NULL, meter_type TEXT NOT NULL, previous_reading REAL NOT NULL, current_reading REAL NOT NULL, usage_kl REAL, calculated_amount REAL, FOREIGN KEY (billing_period_id) REFERENCES billing_periods(id), FOREIGN KEY (tenant_id) REFERENCES tenants(id), UNIQUE(billing_period_id, tenant_id, meter_type));
     CREATE TABLE IF NOT EXISTS invoice_line_items (id INTEGER PRIMARY KEY AUTOINCREMENT, billing_period_id INTEGER NOT NULL, tenant_id INTEGER NOT NULL, line_order INTEGER NOT NULL, activity TEXT NOT NULL, description TEXT NOT NULL, tax_type TEXT NOT NULL DEFAULT 'Standard', qty REAL NOT NULL DEFAULT 1, rate REAL NOT NULL, amount REAL NOT NULL, FOREIGN KEY (billing_period_id) REFERENCES billing_periods(id), FOREIGN KEY (tenant_id) REFERENCES tenants(id));
     CREATE TABLE IF NOT EXISTS qbo_config (id INTEGER PRIMARY KEY, client_id TEXT, client_secret TEXT, realm_id TEXT, access_token TEXT, refresh_token TEXT, token_expires_at TEXT, refresh_token_expires_at TEXT, is_connected INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT (datetime('now')));
+    CREATE TABLE IF NOT EXISTS qbo_invoice_push (id INTEGER PRIMARY KEY AUTOINCREMENT, billing_period_id INTEGER NOT NULL, tenant_id INTEGER NOT NULL, qbo_invoice_id TEXT, qbo_doc_number TEXT, status TEXT NOT NULL DEFAULT 'draft', error_message TEXT, pushed_at TEXT, FOREIGN KEY (billing_period_id) REFERENCES billing_periods(id), FOREIGN KEY (tenant_id) REFERENCES tenants(id), UNIQUE(billing_period_id, tenant_id));
   `;
   for (const stmt of tables.split(';').filter(s => s.trim())) {
     db.run(stmt.trim() + ';');
+  }
+  // Add qbo_customer_id column to tenants if not present (migration)
+  try {
+    db.run("ALTER TABLE tenants ADD COLUMN qbo_customer_id TEXT");
+  } catch (e) {
+    // Column already exists, ignore
   }
 }
 
