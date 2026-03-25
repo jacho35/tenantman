@@ -1522,6 +1522,13 @@ async function pushAllToQbo() {
     const failed = results.filter(r => r.status === 'failed').length;
     if (failed > 0) {
       toast(`Pushed ${pushed}, failed ${failed}`, 'warning');
+      // Show errors inline
+      const errHtml = results.filter(r => r.status === 'failed').map(r =>
+        `<div style="padding:8px;margin:4px 0;background:var(--danger-soft);border-radius:var(--radius-sm);font-size:12px">
+          <strong>Unit ${r.unit_number} — ${r.tenant_name}:</strong> ${r.error}
+        </div>`
+      ).join('');
+      document.getElementById('qbo-push-results').innerHTML = errHtml;
     } else {
       toast(`All ${pushed} invoices pushed to QuickBooks`);
     }

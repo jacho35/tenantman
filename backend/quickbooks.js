@@ -142,6 +142,8 @@ async function qboRequest(method, endpoint, body = null) {
   const apiBase = getApiBase();
   const url = `${apiBase}/${config.realm_id}${endpoint}`;
 
+  console.log(`[QBO API] ${method} ${endpoint}`);
+
   const opts = {
     method,
     headers: {
@@ -154,10 +156,18 @@ async function qboRequest(method, endpoint, body = null) {
   if (body) opts.body = JSON.stringify(body);
 
   const res = await fetch(url, opts);
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error(`[QBO API] Non-JSON response (${res.status}):`, text.substring(0, 500));
+    throw new Error(`QBO API returned non-JSON response (HTTP ${res.status})`);
+  }
 
   if (!res.ok) {
     const errMsg = data?.Fault?.Error?.[0]?.Detail || data?.Fault?.Error?.[0]?.Message || JSON.stringify(data);
+    console.error(`[QBO API] Error (${res.status}):`, errMsg);
     throw new Error(`QBO API error: ${errMsg}`);
   }
 
@@ -267,10 +277,13 @@ async function pushInvoice(tenantId, billingPeriodId) {
   }
 
   // Find or create QBO customer
+  console.log(`[QBO Push] Finding/creating customer for tenant ${tenant.id} (Unit ${tenant.unit_number} - ${tenant.name})`);
   const customer = await findOrCreateCustomer(tenant);
+  console.log(`[QBO Push] Customer matched: QBO ID ${customer.Id} (${customer.DisplayName})`);
 
   // Build and push invoice
   const qboInvoice = buildQboInvoice(customer, lineItems, period, tenant);
+  console.log(`[QBO Push] Pushing invoice with ${lineItems.length} line items`);
   const result = await qboRequest('POST', '/invoice', qboInvoice);
 
   const qboInvoiceId = result.Invoice.Id;
