@@ -9,6 +9,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 :root {
   --bg-primary: #0f1119;
@@ -423,6 +424,61 @@ td .unit-badge {
   display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
 }
 .ocr-preprocess-row .btn { font-size: 11px; padding: 5px 10px; }
+
+/* ===== REPORTS ===== */
+.report-tabs { display: flex; gap: 2px; margin-bottom: 24px; }
+.report-tab {
+  flex: 1; padding: 10px 14px; background: var(--bg-card);
+  border: 1px solid var(--border); font-size: 12px; font-weight: 600;
+  color: var(--text-muted); text-align: center;
+  cursor: pointer; transition: all 0.15s;
+}
+.report-tab:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.report-tab:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.report-tab.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+}
+.stat-card .stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.stat-card .stat-value { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+.stat-card .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+.chart-container { position: relative; height: 300px; margin-bottom: 20px; }
+.chart-container canvas { max-height: 300px; }
+
+.aging-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.aging-bar div { height: 100%; }
+
+.variance-positive { color: var(--danger); }
+.variance-negative { color: var(--success); }
+.variance-neutral { color: var(--text-muted); }
+
+.gallery-upload-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .report-tabs { flex-wrap: wrap; }
+  .report-tab { flex: 1 1 45%; }
+  .report-tab:first-child { border-radius: var(--radius-sm) 0 0 0; }
+  .report-tab:nth-child(2) { border-radius: 0 var(--radius-sm) 0 0; }
+  .report-tab:nth-child(3) { border-radius: 0 0 0 var(--radius-sm); }
+  .report-tab:last-child { border-radius: 0 0 var(--radius-sm) 0; }
+  .gallery-upload-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 18px; border-radius: var(--radius-sm);
+    font-family: var(--font); font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none; transition: all 0.15s;
+    background: var(--accent-soft); color: var(--accent);
+    margin-left: 6px;
+  }
+  .gallery-upload-btn:hover { background: var(--accent); color: white; }
+  .gallery-upload-btn svg { width: 18px; height: 18px; }
+}
 </style>
 </head>
 <body>
@@ -445,6 +501,10 @@ td .unit-badge {
       <div class="nav-item" data-page="tariffs" onclick="switchPage('tariffs')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         Tariffs
+      </div>
+      <div class="nav-item" data-page="reports" onclick="switchPage('reports')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        Reports
       </div>
       <div class="nav-item" data-page="settings" onclick="switchPage('settings')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -681,6 +741,88 @@ td .unit-badge {
       </div>
     </div>
 
+    <!-- ==================== REPORTS PAGE ==================== -->
+    <div class="page" id="page-reports">
+      <h2>Reports & Analytics</h2>
+      <p class="page-desc">Billing summaries, water usage trends, payment aging, and variance analysis.</p>
+
+      <div class="report-tabs">
+        <div class="report-tab active" onclick="setReportTab('summary')">Billing Summary</div>
+        <div class="report-tab" onclick="setReportTab('water')">Water Trends</div>
+        <div class="report-tab" onclick="setReportTab('aging')">Payment Aging</div>
+        <div class="report-tab" onclick="setReportTab('variance')">Variance</div>
+      </div>
+
+      <!-- Billing Summary -->
+      <div class="report-content" id="report-summary">
+        <div class="stat-grid" id="summary-stats"></div>
+        <div class="card">
+          <div class="card-title">Monthly Totals</div>
+          <div class="chart-container"><canvas id="chart-monthly-totals"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Period Breakdown
+            <select id="summary-period-select" onchange="loadPeriodBreakdown()" style="margin-left:auto;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;padding:5px 10px;color:var(--text-primary);font-size:12px"></select>
+          </div>
+          <table>
+            <thead><tr><th>Unit</th><th>Tenant</th><th class="right">Subtotal</th><th class="right">VAT</th><th class="right">Total</th></tr></thead>
+            <tbody id="summary-breakdown-table"></tbody>
+          </table>
+          <div id="summary-grand-total" style="text-align:right;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"></div>
+        </div>
+      </div>
+
+      <!-- Water Trends -->
+      <div class="report-content" id="report-water" style="display:none">
+        <div class="stat-grid" id="water-stats"></div>
+        <div class="card">
+          <div class="card-title">Water Usage Trends (kl per month)</div>
+          <div class="chart-container"><canvas id="chart-water-trends"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Water Cost Trends (R per month)</div>
+          <div class="chart-container"><canvas id="chart-water-costs"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Usage Details by Tenant</div>
+          <div id="water-details-container"></div>
+        </div>
+      </div>
+
+      <!-- Payment Aging -->
+      <div class="report-content" id="report-aging" style="display:none">
+        <div class="stat-grid" id="aging-stats"></div>
+        <div class="card">
+          <div class="card-title">Outstanding Balance by Tenant</div>
+          <div class="chart-container"><canvas id="chart-aging"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Tenant Aging Detail</div>
+          <table>
+            <thead><tr><th>Unit</th><th>Tenant</th><th class="right">Current</th><th class="right">30 Days</th><th class="right">60 Days</th><th class="right">90+ Days</th><th class="right">Total</th></tr></thead>
+            <tbody id="aging-table"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">Invoice History</div>
+          <div id="aging-history-container"></div>
+        </div>
+      </div>
+
+      <!-- Variance -->
+      <div class="report-content" id="report-variance" style="display:none">
+        <div class="stat-grid" id="variance-stats"></div>
+        <div class="card">
+          <div class="card-title">Month-over-Month Billing (Excl. VAT)</div>
+          <div class="chart-container"><canvas id="chart-variance"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Variance Details</div>
+          <div id="variance-details-container"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ==================== SETTINGS PAGE ==================== -->
     <div class="page" id="page-settings">
       <h2>Settings</h2>
@@ -758,6 +900,10 @@ td .unit-badge {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
     Tariffs
   </div>
+  <div class="mobile-nav-item" data-page="reports" onclick="switchPage('reports')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+    Reports
+  </div>
   <div class="mobile-nav-item" data-page="settings" onclick="switchPage('settings')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
     Settings
@@ -818,6 +964,7 @@ function switchPage(page) {
   if (page === 'tariffs') loadTariffs();
   if (page === 'settings') loadSettings();
   if (page === 'billing') loadBillingPeriods();
+  if (page === 'reports') loadReports();
 }
 
 // ===== TOAST =====
@@ -1249,10 +1396,14 @@ async function renderReadingsForm() {
               <div class="form-group" style="margin:0">
                 <input type="number" id="wr-curr-${t.id}" value="${currVal}" class="water-reading" oninput="updateUsage(${t.id})" ${isFinalized ? 'disabled' : ''}>
               </div>
-              <button class="ocr-btn" title="OCR from photo" onclick="startOcr(${t.id}, 'water')">
+              <button class="ocr-btn" title="OCR from camera" onclick="startOcr(${t.id}, 'water')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
               </button>
+              <button class="gallery-upload-btn" title="Choose from gallery" onclick="startGalleryOcr(${t.id}, 'water')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              </button>
               <input type="file" id="ocr-file-${t.id}-water" accept="image/*" capture="environment" onchange="handleOcrFile(event, ${t.id}, 'water')">
+              <input type="file" id="ocr-gallery-${t.id}-water" accept="image/*" onchange="handleOcrFile(event, ${t.id}, 'water')">
             </div>
           </div>
           <div class="form-group">
@@ -1584,6 +1735,470 @@ async function init() {
 }
 
 init();
+
+// ===== GALLERY UPLOAD (MOBILE) =====
+function startGalleryOcr(tenantId, meterType) {
+  document.getElementById(`ocr-gallery-${tenantId}-${meterType}`).click();
+}
+
+// ===== REPORTS =====
+let reportCharts = {};
+let currentReportTab = 'summary';
+
+function setReportTab(tab) {
+  currentReportTab = tab;
+  document.querySelectorAll('.report-tab').forEach((el, i) => {
+    const tabs = ['summary','water','aging','variance'];
+    el.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.report-content').forEach(el => el.style.display = 'none');
+  document.getElementById(`report-${tab}`).style.display = 'block';
+  loadReportTab(tab);
+}
+
+async function loadReports() {
+  loadReportTab(currentReportTab);
+}
+
+async function loadReportTab(tab) {
+  if (tab === 'summary') await loadBillingSummary();
+  if (tab === 'water') await loadWaterTrends();
+  if (tab === 'aging') await loadAgingReport();
+  if (tab === 'variance') await loadVarianceReport();
+}
+
+const CHART_COLORS = ['#7c4dff','#00e676','#ffab40','#ff5252','#40c4ff','#ff80ab','#69f0ae','#ffd740'];
+
+function destroyChart(id) {
+  if (reportCharts[id]) { reportCharts[id].destroy(); delete reportCharts[id]; }
+}
+
+async function loadBillingSummary() {
+  try {
+    const data = await api('/reports/billing-summary');
+    const periods = data.periods || [];
+
+    // Stats
+    const latest = periods[0];
+    const totalRevenue = periods.reduce((s, p) => s + p.total, 0);
+    const avgMonthly = periods.length > 0 ? totalRevenue / periods.length : 0;
+    document.getElementById('summary-stats').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Latest Period</div>
+        <div class="stat-value">${latest?.billing_month_label || '—'}</div>
+        <div class="stat-sub">${latest ? formatR(latest.total) + ' incl. VAT' : 'No data'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value">${formatR(totalRevenue)}</div>
+        <div class="stat-sub">${periods.length} periods</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Monthly</div>
+        <div class="stat-value">${formatR(avgMonthly)}</div>
+        <div class="stat-sub">incl. VAT</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Tenants</div>
+        <div class="stat-value">${latest?.tenant_count || 0}</div>
+        <div class="stat-sub">invoiced last period</div>
+      </div>
+    `;
+
+    // Monthly totals chart
+    const reversed = [...periods].reverse();
+    destroyChart('monthly-totals');
+    const ctx = document.getElementById('chart-monthly-totals').getContext('2d');
+    reportCharts['monthly-totals'] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: reversed.map(p => p.billing_month_label),
+        datasets: [{
+          label: 'Subtotal (excl. VAT)',
+          data: reversed.map(p => p.subtotal),
+          backgroundColor: 'rgba(124, 77, 255, 0.6)',
+          borderColor: '#7c4dff',
+          borderWidth: 1, borderRadius: 4
+        }, {
+          label: 'VAT',
+          data: reversed.map(p => p.tax),
+          backgroundColor: 'rgba(0, 230, 118, 0.4)',
+          borderColor: '#00e676',
+          borderWidth: 1, borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9fa8da', font: { family: 'DM Sans' } } } },
+        scales: {
+          x: { stacked: true, ticks: { color: '#5c6bc0' }, grid: { color: 'rgba(45,49,84,0.5)' } },
+          y: { stacked: true, ticks: { color: '#5c6bc0', callback: v => 'R' + v.toLocaleString() }, grid: { color: 'rgba(45,49,84,0.5)' } }
+        }
+      }
+    });
+
+    // Period select dropdown
+    const select = document.getElementById('summary-period-select');
+    select.innerHTML = periods.map(p => `<option value="${p.id}">${p.billing_month_label}</option>`).join('');
+    if (periods.length > 0) loadPeriodBreakdown();
+  } catch (e) {
+    console.error('Billing summary error:', e);
+  }
+}
+
+async function loadPeriodBreakdown() {
+  const periodId = document.getElementById('summary-period-select').value;
+  if (!periodId) return;
+  try {
+    const data = await api(`/reports/billing-summary?period_id=${periodId}`);
+    const tb = document.getElementById('summary-breakdown-table');
+    tb.innerHTML = data.tenants.map(t => `
+      <tr>
+        <td><span class="unit-badge">Unit ${t.unit_number}</span></td>
+        <td>${t.name}</td>
+        <td class="right mono">${formatR(t.subtotal)}</td>
+        <td class="right mono">${formatR(t.tax)}</td>
+        <td class="right mono" style="font-weight:700">${formatR(t.total)}</td>
+      </tr>
+    `).join('');
+    document.getElementById('summary-grand-total').innerHTML = `
+      <span style="color:var(--text-secondary);font-size:13px">Grand Total: </span>
+      <span class="amount-large" style="color:var(--success)">${formatR(data.grandTotal)}</span>
+      <span style="color:var(--text-muted);font-size:12px;margin-left:8px">(Subtotal: ${formatR(data.grandSubtotal)} + VAT: ${formatR(data.grandTax)})</span>
+    `;
+  } catch (e) { console.error('Period breakdown error:', e); }
+}
+
+async function loadWaterTrends() {
+  try {
+    const data = await api('/reports/water-trends');
+    if (!data.length) {
+      document.getElementById('water-stats').innerHTML = '<div class="stat-card" style="grid-column:1/-1"><div class="stat-label">No Data</div><div class="stat-value">—</div><div class="stat-sub">No water readings recorded yet</div></div>';
+      return;
+    }
+
+    // Collect all unique period labels in order
+    const allLabels = [];
+    const labelSet = new Set();
+    for (const t of data) {
+      for (const r of t.readings) {
+        const key = `${r.year}-${String(r.month).padStart(2,'0')}`;
+        if (!labelSet.has(key)) { labelSet.add(key); allLabels.push({ key, label: r.label }); }
+      }
+    }
+    allLabels.sort((a, b) => a.key.localeCompare(b.key));
+
+    // Stats
+    const latestReadings = data.map(t => t.readings[t.readings.length - 1]).filter(Boolean);
+    const totalUsageLatest = latestReadings.reduce((s, r) => s + (r.usage_kl || 0), 0);
+    const avgUsage = data.reduce((s, t) => s + t.readings.reduce((a, r) => a + r.usage_kl, 0) / t.readings.length, 0);
+    const maxUsage = Math.max(...data.flatMap(t => t.readings.map(r => r.usage_kl)));
+    document.getElementById('water-stats').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Total Usage (Latest)</div>
+        <div class="stat-value">${totalUsageLatest.toFixed(3)} kl</div>
+        <div class="stat-sub">all tenants combined</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Usage/Tenant</div>
+        <div class="stat-value">${avgUsage.toFixed(3)} kl</div>
+        <div class="stat-sub">per month</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Peak Usage</div>
+        <div class="stat-value">${maxUsage.toFixed(3)} kl</div>
+        <div class="stat-sub">single tenant highest</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tenants Tracked</div>
+        <div class="stat-value">${data.length}</div>
+        <div class="stat-sub">with water readings</div>
+      </div>
+    `;
+
+    // Usage chart
+    destroyChart('water-trends');
+    const ctx1 = document.getElementById('chart-water-trends').getContext('2d');
+    reportCharts['water-trends'] = new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels: allLabels.map(l => l.label),
+        datasets: data.map((t, i) => ({
+          label: `Unit ${t.unit_number}`,
+          data: allLabels.map(l => {
+            const r = t.readings.find(x => `${x.year}-${String(x.month).padStart(2,'0')}` === l.key);
+            return r ? r.usage_kl : null;
+          }),
+          borderColor: CHART_COLORS[i % CHART_COLORS.length],
+          backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + '33',
+          tension: 0.3, fill: false, pointRadius: 4, pointHoverRadius: 6, spanGaps: true
+        }))
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9fa8da', font: { family: 'DM Sans' } } } },
+        scales: {
+          x: { ticks: { color: '#5c6bc0' }, grid: { color: 'rgba(45,49,84,0.5)' } },
+          y: { ticks: { color: '#5c6bc0', callback: v => v + ' kl' }, grid: { color: 'rgba(45,49,84,0.5)' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Cost chart
+    destroyChart('water-costs');
+    const ctx2 = document.getElementById('chart-water-costs').getContext('2d');
+    reportCharts['water-costs'] = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: allLabels.map(l => l.label),
+        datasets: data.map((t, i) => ({
+          label: `Unit ${t.unit_number}`,
+          data: allLabels.map(l => {
+            const r = t.readings.find(x => `${x.year}-${String(x.month).padStart(2,'0')}` === l.key);
+            return r ? r.cost : null;
+          }),
+          backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + '99',
+          borderColor: CHART_COLORS[i % CHART_COLORS.length],
+          borderWidth: 1, borderRadius: 4
+        }))
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9fa8da', font: { family: 'DM Sans' } } } },
+        scales: {
+          x: { ticks: { color: '#5c6bc0' }, grid: { color: 'rgba(45,49,84,0.5)' } },
+          y: { ticks: { color: '#5c6bc0', callback: v => 'R' + v.toLocaleString() }, grid: { color: 'rgba(45,49,84,0.5)' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Details table per tenant
+    let detailsHtml = '';
+    for (const t of data) {
+      detailsHtml += `
+        <div style="margin-bottom:16px">
+          <div style="font-weight:600;margin-bottom:8px"><span class="unit-badge">Unit ${t.unit_number}</span> ${t.name}</div>
+          <table>
+            <thead><tr><th>Period</th><th class="right">Previous</th><th class="right">Current</th><th class="right">Usage (kl)</th><th class="right">Cost</th></tr></thead>
+            <tbody>${t.readings.map(r => `
+              <tr>
+                <td>${r.label}</td>
+                <td class="right mono">${r.previous_reading}</td>
+                <td class="right mono">${r.current_reading}</td>
+                <td class="right mono">${r.usage_kl.toFixed(3)}</td>
+                <td class="right mono">${r.cost ? formatR(r.cost) : '—'}</td>
+              </tr>
+            `).join('')}</tbody>
+          </table>
+        </div>
+      `;
+    }
+    document.getElementById('water-details-container').innerHTML = detailsHtml;
+  } catch (e) { console.error('Water trends error:', e); }
+}
+
+async function loadAgingReport() {
+  try {
+    const data = await api('/reports/aging');
+    const aging = data.aging || [];
+    const totalOutstanding = aging.reduce((s, a) => s + a.totalOutstanding, 0);
+    const totalCurrent = aging.reduce((s, a) => s + a.current, 0);
+    const total30 = aging.reduce((s, a) => s + a.days30, 0);
+    const total60 = aging.reduce((s, a) => s + a.days60, 0);
+    const total90 = aging.reduce((s, a) => s + a.days90plus, 0);
+
+    document.getElementById('aging-stats').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Total Outstanding</div>
+        <div class="stat-value">${formatR(totalOutstanding)}</div>
+        <div class="stat-sub">${aging.length} tenants</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Current</div>
+        <div class="stat-value" style="color:var(--success)">${formatR(totalCurrent)}</div>
+        <div class="stat-sub">latest period</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">30 Days</div>
+        <div class="stat-value" style="color:var(--warning)">${formatR(total30)}</div>
+        <div class="stat-sub">1 period overdue</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">60+ Days</div>
+        <div class="stat-value" style="color:var(--danger)">${formatR(total60 + total90)}</div>
+        <div class="stat-sub">2+ periods overdue</div>
+      </div>
+    `;
+
+    // Aging chart
+    destroyChart('aging');
+    const ctx = document.getElementById('chart-aging').getContext('2d');
+    reportCharts['aging'] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: aging.map(a => `Unit ${a.unit_number}`),
+        datasets: [
+          { label: 'Current', data: aging.map(a => a.current), backgroundColor: 'rgba(0,230,118,0.6)', borderRadius: 4 },
+          { label: '30 Days', data: aging.map(a => a.days30), backgroundColor: 'rgba(255,171,64,0.6)', borderRadius: 4 },
+          { label: '60 Days', data: aging.map(a => a.days60), backgroundColor: 'rgba(255,128,171,0.6)', borderRadius: 4 },
+          { label: '90+ Days', data: aging.map(a => a.days90plus), backgroundColor: 'rgba(255,82,82,0.6)', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9fa8da', font: { family: 'DM Sans' } } } },
+        scales: {
+          x: { stacked: true, ticks: { color: '#5c6bc0' }, grid: { color: 'rgba(45,49,84,0.5)' } },
+          y: { stacked: true, ticks: { color: '#5c6bc0', callback: v => 'R' + v.toLocaleString() }, grid: { color: 'rgba(45,49,84,0.5)' } }
+        }
+      }
+    });
+
+    // Aging table
+    document.getElementById('aging-table').innerHTML = aging.map(a => {
+      const barTotal = a.totalOutstanding || 1;
+      return `<tr>
+        <td><span class="unit-badge">Unit ${a.unit_number}</span></td>
+        <td>${a.name}</td>
+        <td class="right mono" style="color:var(--success)">${formatR(a.current)}</td>
+        <td class="right mono" style="color:var(--warning)">${formatR(a.days30)}</td>
+        <td class="right mono" style="color:var(--danger)">${formatR(a.days60)}</td>
+        <td class="right mono" style="color:var(--danger)">${formatR(a.days90plus)}</td>
+        <td class="right mono" style="font-weight:700">${formatR(a.totalOutstanding)}</td>
+      </tr>`;
+    }).join('');
+
+    // Invoice history
+    let histHtml = '';
+    for (const a of aging) {
+      if (!a.invoices.length) continue;
+      histHtml += `
+        <div style="margin-bottom:16px">
+          <div style="font-weight:600;margin-bottom:8px"><span class="unit-badge">Unit ${a.unit_number}</span> ${a.name}</div>
+          <table>
+            <thead><tr><th>Period</th><th>Status</th><th>QBO</th><th class="right">Total (incl. VAT)</th></tr></thead>
+            <tbody>${a.invoices.map(inv => `
+              <tr>
+                <td>${inv.label}</td>
+                <td>${inv.status === 'finalized' ? '<span class="badge badge-success">Finalized</span>' : '<span class="badge badge-warning">Draft</span>'}</td>
+                <td>${inv.qbo_status === 'pushed' ? '<span class="badge badge-success">Pushed</span> #' + inv.qbo_doc : inv.qbo_status === 'failed' ? '<span class="badge badge-warning">Failed</span>' : '<span style="color:var(--text-muted);font-size:11px">Not pushed</span>'}</td>
+                <td class="right mono" style="font-weight:600">${formatR(inv.total)}</td>
+              </tr>
+            `).join('')}</tbody>
+          </table>
+        </div>
+      `;
+    }
+    document.getElementById('aging-history-container').innerHTML = histHtml || '<p style="color:var(--text-muted);font-size:13px">No invoice history available.</p>';
+  } catch (e) { console.error('Aging report error:', e); }
+}
+
+async function loadVarianceReport() {
+  try {
+    const data = await api('/reports/variance');
+    const variance = data.variance || [];
+    const periods = data.periods || [];
+
+    if (!variance.length) {
+      document.getElementById('variance-stats').innerHTML = '<div class="stat-card" style="grid-column:1/-1"><div class="stat-label">Insufficient Data</div><div class="stat-value">—</div><div class="stat-sub">Need at least 2 billing periods for variance analysis</div></div>';
+      return;
+    }
+
+    const latest = variance[0];
+    document.getElementById('variance-stats').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Latest Change</div>
+        <div class="stat-value ${latest.totalPctChange > 0 ? 'variance-positive' : latest.totalPctChange < 0 ? 'variance-negative' : 'variance-neutral'}">
+          ${latest.totalPctChange >= 0 ? '+' : ''}${latest.totalPctChange.toFixed(1)}%
+        </div>
+        <div class="stat-sub">${latest.prevPeriod.label} → ${latest.currPeriod.label}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Billing Change</div>
+        <div class="stat-value">${latest.totalChange >= 0 ? '+' : ''}${formatR(latest.totalChange)}</div>
+        <div class="stat-sub">excl. VAT</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Water Usage Change</div>
+        <div class="stat-value ${latest.waterPctChange > 0 ? 'variance-positive' : 'variance-negative'}">
+          ${latest.waterPctChange >= 0 ? '+' : ''}${latest.waterPctChange.toFixed(1)}%
+        </div>
+        <div class="stat-sub">${latest.waterChange >= 0 ? '+' : ''}${latest.waterChange.toFixed(3)} kl</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Periods Compared</div>
+        <div class="stat-value">${variance.length}</div>
+        <div class="stat-sub">month-over-month</div>
+      </div>
+    `;
+
+    // Variance chart (period totals as bar with line for trend)
+    destroyChart('variance');
+    const ctx = document.getElementById('chart-variance').getContext('2d');
+    reportCharts['variance'] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: periods.map(p => p.label),
+        datasets: [{
+          type: 'bar',
+          label: 'Total Billing',
+          data: periods.map(p => p.subtotal),
+          backgroundColor: 'rgba(124, 77, 255, 0.5)',
+          borderColor: '#7c4dff', borderWidth: 1, borderRadius: 4
+        }, {
+          type: 'line',
+          label: 'Water Usage (kl)',
+          data: periods.map(p => p.waterUsageTotal),
+          borderColor: '#00e676',
+          backgroundColor: 'rgba(0,230,118,0.1)',
+          tension: 0.3, yAxisID: 'y1', pointRadius: 4
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9fa8da', font: { family: 'DM Sans' } } } },
+        scales: {
+          x: { ticks: { color: '#5c6bc0' }, grid: { color: 'rgba(45,49,84,0.5)' } },
+          y: { ticks: { color: '#5c6bc0', callback: v => 'R' + v.toLocaleString() }, grid: { color: 'rgba(45,49,84,0.5)' }, position: 'left' },
+          y1: { ticks: { color: '#00e676', callback: v => v + ' kl' }, grid: { display: false }, position: 'right' }
+        }
+      }
+    });
+
+    // Variance details
+    let detailsHtml = '';
+    for (const v of variance) {
+      detailsHtml += `
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title">${v.prevPeriod.label} → ${v.currPeriod.label}
+            <span class="badge ${v.totalPctChange > 5 ? 'badge-warning' : v.totalPctChange < -5 ? 'badge-success' : 'badge-info'}">
+              ${v.totalPctChange >= 0 ? '+' : ''}${v.totalPctChange.toFixed(1)}%
+            </span>
+          </div>
+          <table>
+            <thead><tr><th>Unit</th><th>Tenant</th><th class="right">Previous</th><th class="right">Current</th><th class="right">Change</th><th class="right">%</th></tr></thead>
+            <tbody>${v.tenantVariance.map(t => `
+              <tr>
+                <td><span class="unit-badge">Unit ${t.unit_number}</span></td>
+                <td>${t.name}</td>
+                <td class="right mono">${formatR(t.prevAmount)}</td>
+                <td class="right mono">${formatR(t.currAmount)}</td>
+                <td class="right mono ${t.change > 0 ? 'variance-positive' : t.change < 0 ? 'variance-negative' : ''}">${t.change >= 0 ? '+' : ''}${formatR(t.change)}</td>
+                <td class="right mono ${t.pctChange > 5 ? 'variance-positive' : t.pctChange < -5 ? 'variance-negative' : 'variance-neutral'}">${t.pctChange >= 0 ? '+' : ''}${t.pctChange.toFixed(1)}%</td>
+              </tr>
+            `).join('')}</tbody>
+          </table>
+          <div style="text-align:right;margin-top:8px;font-size:12px;color:var(--text-muted)">
+            Total: ${formatR(v.prevPeriod.subtotal)} → ${formatR(v.currPeriod.subtotal)}
+            (${v.totalChange >= 0 ? '+' : ''}${formatR(v.totalChange)})
+            · Water: ${v.waterChange >= 0 ? '+' : ''}${v.waterChange.toFixed(3)} kl (${v.waterPctChange >= 0 ? '+' : ''}${v.waterPctChange.toFixed(1)}%)
+          </div>
+        </div>
+      `;
+    }
+    document.getElementById('variance-details-container').innerHTML = detailsHtml;
+  } catch (e) { console.error('Variance report error:', e); }
+}
 
 // ===== OCR ENGINE =====
 let ocrState = {
