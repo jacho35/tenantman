@@ -288,6 +288,7 @@ function buildQboInvoice(customer, lineItems, period, tenant, taxCodeId) {
   const dueDate = lastDay.toISOString().split('T')[0];
 
   const invoice = {
+    AutoDocNumber: true,
     CustomerRef: { value: customer.Id },
     Line: lines,
     TxnDate: period.current_reading_date || new Date().toISOString().split('T')[0],
