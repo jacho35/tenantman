@@ -116,6 +116,12 @@ router.post('/disconnect', (req, res) => {
   res.json({ message: 'Disconnected from QuickBooks' });
 });
 
+// POST /api/qbo/reset-customer-mappings - Clear cached QBO customer ID mappings
+router.post('/reset-customer-mappings', (req, res) => {
+  run("UPDATE tenants SET qbo_customer_id = NULL WHERE qbo_customer_id IS NOT NULL");
+  res.json({ message: 'Customer mappings cleared. Next push will re-match by email.' });
+});
+
 // GET /api/qbo/customers - List QBO customers
 router.get('/customers', async (req, res) => {
   try {

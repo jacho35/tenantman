@@ -208,51 +208,33 @@ async function queryCustomers() {
   return data.QueryResponse?.Customer || [];
 }
 
-// Find or create a QBO customer matching a tenant
+// Find or create a QBO customer matching a tenant by email
 async function findOrCreateCustomer(tenant) {
+  if (!tenant.email) throw new Error(`Tenant "${tenant.name}" has no email address`);
+
   // Check if tenant already has a QBO customer ID mapped
   const mapping = get("SELECT qbo_customer_id FROM tenants WHERE id = ?", [tenant.id]);
   if (mapping && mapping.qbo_customer_id) {
-    // Verify customer still exists in QBO
     try {
       const data = await qboRequest('GET', `/customer/${mapping.qbo_customer_id}`);
       if (data.Customer) return data.Customer;
     } catch (e) {
-      // Customer may have been deleted, fall through to search/create
+      // Customer may have been deleted, fall through to search
     }
   }
 
-  // Search by email
-  if (tenant.email) {
-    try {
-      const data = await qboRequest('GET', '/query?query=' + encodeURIComponent(`SELECT * FROM Customer WHERE PrimaryEmailAddr = '${tenant.email}'`));
-      const customers = data.QueryResponse?.Customer || [];
-      if (customers.length > 0) {
-        run("UPDATE tenants SET qbo_customer_id = ? WHERE id = ?", [customers[0].Id, tenant.id]);
-        return customers[0];
-      }
-    } catch (e) {
-      // Fall through to create
-    }
+  // Search by email only
+  const data = await qboRequest('GET', '/query?query=' + encodeURIComponent(`SELECT * FROM Customer WHERE PrimaryEmailAddr = '${tenant.email}'`));
+  const customers = data.QueryResponse?.Customer || [];
+  if (customers.length > 0) {
+    run("UPDATE tenants SET qbo_customer_id = ? WHERE id = ?", [customers[0].Id, tenant.id]);
+    return customers[0];
   }
 
-  // Search by display name
-  try {
-    const displayName = `Unit ${tenant.unit_number} - ${tenant.name}`;
-    const data = await qboRequest('GET', '/query?query=' + encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName = '${displayName}'`));
-    const customers = data.QueryResponse?.Customer || [];
-    if (customers.length > 0) {
-      run("UPDATE tenants SET qbo_customer_id = ? WHERE id = ?", [customers[0].Id, tenant.id]);
-      return customers[0];
-    }
-  } catch (e) {
-    // Fall through to create
-  }
-
-  // Create new customer
+  // No match — create new customer
   const customerData = {
     DisplayName: `Unit ${tenant.unit_number} - ${tenant.name}`,
-    PrimaryEmailAddr: tenant.email ? { Address: tenant.email } : undefined,
+    PrimaryEmailAddr: { Address: tenant.email },
     BillAddr: tenant.billing_address ? { Line1: tenant.billing_address } : undefined,
   };
 
