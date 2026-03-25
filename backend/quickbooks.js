@@ -329,7 +329,7 @@ async function pushInvoice(tenantId, billingPeriodId) {
   // Check if already pushed
   const existing = get("SELECT * FROM qbo_invoice_push WHERE billing_period_id = ? AND tenant_id = ?", [billingPeriodId, tenantId]);
   if (existing && existing.status === 'pushed') {
-    throw new Error(`Invoice already pushed to QuickBooks (QBO Invoice #${existing.qbo_invoice_id})`);
+    console.log(`[QBO Push] Re-pushing invoice (previously QBO #${existing.qbo_invoice_id})`);
   }
 
   // Find tax code for standard VAT
