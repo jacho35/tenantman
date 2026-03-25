@@ -1124,12 +1124,15 @@ function renderPeriods() {
     const statusBadge = p.status === 'draft' ? '<span class="badge badge-warning">Draft</span>'
       : p.status === 'finalized' ? '<span class="badge badge-success">Finalized</span>'
       : '<span class="badge badge-info">Pushed</span>';
+    const finalizeBtn = p.status === 'draft'
+      ? `<button class="btn btn-sm" style="background:var(--success);color:#fff;margin-right:6px" onclick="finalizePeriod(${p.id}, '${p.billing_month_label}')">Finalize</button>`
+      : `<button class="btn btn-sm" style="background:var(--warning);color:#000;margin-right:6px" onclick="reopenPeriod(${p.id}, '${p.billing_month_label}')">Reopen</button>`;
     return `<tr>
       <td><strong>${p.billing_month_label}</strong></td>
       <td class="mono">${p.days_in_month} days</td>
       <td style="font-size:12px;color:var(--text-muted)">${p.previous_reading_date || '—'} → ${p.current_reading_date || '—'}</td>
       <td>${statusBadge}</td>
-      <td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="selectPeriod(${p.id})">Use →</button></td>
+      <td style="text-align:right">${finalizeBtn}<button class="btn btn-primary btn-sm" onclick="selectPeriod(${p.id})">Use →</button></td>
     </tr>`;
   }).join('');
 }
@@ -1162,6 +1165,24 @@ async function createBillingPeriod() {
   }
 }
 
+async function finalizePeriod(periodId, label) {
+  if (!confirm(`Finalize "${label}"?\n\nThis will lock all readings and invoices for this period. You can reopen it later if needed.`)) return;
+  try {
+    await api(`/billing-periods/${periodId}/finalize`, 'POST');
+    toast(`Period "${label}" finalized`);
+    loadBillingPeriods();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function reopenPeriod(periodId, label) {
+  if (!confirm(`Reopen "${label}"?\n\nThis will unlock readings and invoices for editing.`)) return;
+  try {
+    await api(`/billing-periods/${periodId}/reopen`, 'POST');
+    toast(`Period "${label}" reopened`);
+    loadBillingPeriods();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 async function selectPeriod(periodId) {
   selectedPeriodId = periodId;
   setBillingStep(2);
@@ -1173,11 +1194,17 @@ function setBillingStep(step) {
     document.getElementById(`bstep${i}`).className = 'billing-step' + (i === step ? ' active' : (i < step ? ' done' : ''));
     document.getElementById(`bcontent${i}`).style.display = i === step ? 'block' : 'none';
   }
+  const period = billingPeriods.find(p => p.id === selectedPeriodId);
+  const isFinalized = period && period.status === 'finalized';
   if (step === 2) renderReadingsForm();
   if (step === 3) {
-    const period = billingPeriods.find(p => p.id === selectedPeriodId);
     if (period) document.getElementById('gen-days').textContent = period.days_in_month;
   }
+  // Disable action buttons for finalized periods
+  const saveBtn = document.querySelector('#bcontent2 .btn-primary');
+  const genBtn = document.querySelector('#bcontent3 .btn-success');
+  if (saveBtn) { saveBtn.disabled = isFinalized; saveBtn.title = isFinalized ? 'Period is finalized' : ''; }
+  if (genBtn) { genBtn.disabled = isFinalized; genBtn.title = isFinalized ? 'Period is finalized' : ''; }
 }
 
 async function renderReadingsForm() {
@@ -1186,9 +1213,11 @@ async function renderReadingsForm() {
   const period = billingPeriods.find(p => p.id === selectedPeriodId);
   const existingReadings = await api(`/billing-periods/${selectedPeriodId}/readings`);
 
+  const isFinalized = period.status === 'finalized';
   let html = `<div style="margin-bottom:16px;color:var(--text-secondary);font-size:14px">
     Period: <strong style="color:var(--text-primary)">${period.billing_month_label}</strong> · ${period.days_in_month} days
     ${period.previous_reading_date ? ` · Readings: ${period.previous_reading_date} → ${period.current_reading_date}` : ''}
+    ${isFinalized ? ' · <span class="badge badge-success">Finalized — Read Only</span>' : ''}
   </div>`;
 
   for (const t of tenants) {
@@ -1212,13 +1241,13 @@ async function renderReadingsForm() {
         <div class="form-grid cols-4">
           <div class="form-group">
             <label>Previous Water Reading</label>
-            <input type="number" id="wr-prev-${t.id}" value="${prevVal}" class="water-reading">
+            <input type="number" id="wr-prev-${t.id}" value="${prevVal}" class="water-reading" ${isFinalized ? 'disabled' : ''}>
           </div>
           <div class="form-group">
             <label>Current Water Reading</label>
             <div class="ocr-input-row">
               <div class="form-group" style="margin:0">
-                <input type="number" id="wr-curr-${t.id}" value="${currVal}" class="water-reading" oninput="updateUsage(${t.id})">
+                <input type="number" id="wr-curr-${t.id}" value="${currVal}" class="water-reading" oninput="updateUsage(${t.id})" ${isFinalized ? 'disabled' : ''}>
               </div>
               <button class="ocr-btn" title="OCR from photo" onclick="startOcr(${t.id}, 'water')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -1241,11 +1270,11 @@ async function renderReadingsForm() {
         <div class="form-grid cols-4" style="margin-top:12px">
           <div class="form-group">
             <label>Previous Elec Reading (kWh)</label>
-            <input type="number" id="er-prev-${t.id}" class="elec-reading">
+            <input type="number" id="er-prev-${t.id}" class="elec-reading" ${isFinalized ? 'disabled' : ''}>
           </div>
           <div class="form-group">
             <label>Current Elec Reading (kWh)</label>
-            <input type="number" id="er-curr-${t.id}" class="elec-reading">
+            <input type="number" id="er-curr-${t.id}" class="elec-reading" ${isFinalized ? 'disabled' : ''}>
           </div>
         </div>` : ''}
       </div>`;
@@ -1275,6 +1304,8 @@ async function updateUsage(tenantId) {
 }
 
 async function saveAllReadings() {
+  const period = billingPeriods.find(p => p.id === selectedPeriodId);
+  if (period && period.status === 'finalized') { toast('Cannot save readings — period is finalized', 'error'); return; }
   for (const t of tenants) {
     const prev = parseFloat(document.getElementById(`wr-prev-${t.id}`)?.value);
     const curr = parseFloat(document.getElementById(`wr-curr-${t.id}`)?.value);
@@ -1305,6 +1336,8 @@ async function saveAllReadings() {
 }
 
 async function generateAllInvoices() {
+  const period = billingPeriods.find(p => p.id === selectedPeriodId);
+  if (period && period.status === 'finalized') { toast('Cannot generate invoices — period is finalized', 'error'); return; }
   try {
     const results = await api(`/generate-all/${selectedPeriodId}`, 'POST');
     let html = '';

@@ -55,13 +55,34 @@ router.post('/billing-periods', (req, res) => {
 router.put('/billing-periods/:id', (req, res) => {
   const c = get("SELECT * FROM billing_periods WHERE id=?", [+req.params.id]); if (!c) return res.status(404).json({ error: 'Not found' });
   const { billing_month_label, previous_reading_date, current_reading_date, status } = req.body;
+  // Allow status changes on finalized periods, but block other field edits
+  if (c.status === 'finalized' && !status) return res.status(403).json({ error: 'Cannot modify a finalized period. Reopen it first.' });
+  if (c.status === 'finalized' && status !== 'draft' && (billing_month_label || previous_reading_date || current_reading_date)) {
+    return res.status(403).json({ error: 'Cannot modify a finalized period. Reopen it first.' });
+  }
   run("UPDATE billing_periods SET billing_month_label=?,previous_reading_date=?,current_reading_date=?,status=? WHERE id=?", [billing_month_label||c.billing_month_label, previous_reading_date||c.previous_reading_date, current_reading_date||c.current_reading_date, status||c.status, +req.params.id]);
   res.json({ message: 'Updated' });
+});
+router.post('/billing-periods/:id/finalize', (req, res) => {
+  const p = get("SELECT * FROM billing_periods WHERE id=?", [+req.params.id]);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (p.status === 'finalized') return res.status(409).json({ error: 'Period is already finalized' });
+  run("UPDATE billing_periods SET status='finalized' WHERE id=?", [+req.params.id]);
+  res.json({ message: 'Period finalized' });
+});
+router.post('/billing-periods/:id/reopen', (req, res) => {
+  const p = get("SELECT * FROM billing_periods WHERE id=?", [+req.params.id]);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (p.status === 'draft') return res.status(409).json({ error: 'Period is already draft' });
+  run("UPDATE billing_periods SET status='draft' WHERE id=?", [+req.params.id]);
+  res.json({ message: 'Period reopened' });
 });
 
 router.get('/billing-periods/:periodId/readings', (req, res) => res.json(all("SELECT mr.*, t.name as tenant_name, t.unit_number FROM meter_readings mr JOIN tenants t ON mr.tenant_id = t.id WHERE mr.billing_period_id = ? ORDER BY t.unit_number", [+req.params.periodId])));
 router.post('/meter-readings', (req, res) => {
   const { billing_period_id, tenant_id, meter_type, previous_reading, current_reading } = req.body;
+  const period = get("SELECT * FROM billing_periods WHERE id=?", [billing_period_id]);
+  if (period && period.status === 'finalized') return res.status(403).json({ error: 'Cannot modify readings for a finalized period' });
   const usage_kl = (current_reading - previous_reading) / 1000;
   const existing = get("SELECT id FROM meter_readings WHERE billing_period_id=? AND tenant_id=? AND meter_type=?", [billing_period_id, tenant_id, meter_type]);
   if (existing) { run("UPDATE meter_readings SET previous_reading=?,current_reading=?,usage_kl=? WHERE id=?", [previous_reading, current_reading, usage_kl, existing.id]); res.json({ id: existing.id, usage_kl, message: 'Updated' }); }
@@ -73,6 +94,8 @@ router.get('/meter-readings/last/:tenantId/:meterType', (req, res) => {
 });
 
 router.post('/generate-invoice/:periodId/:tenantId', (req, res) => {
+  const period = get("SELECT * FROM billing_periods WHERE id=?", [+req.params.periodId]);
+  if (period && period.status === 'finalized') return res.status(403).json({ error: 'Cannot generate invoices for a finalized period' });
   try {
     const lines = generateLineItems(+req.params.tenantId, +req.params.periodId);
     saveLineItems(+req.params.tenantId, +req.params.periodId, lines);
@@ -88,6 +111,8 @@ router.get('/invoice-lines/:periodId/:tenantId', (req, res) => {
   res.json({ lines, subtotal, tax: subtotal * vatRate, total: subtotal * (1 + vatRate) });
 });
 router.post('/generate-all/:periodId', (req, res) => {
+  const period = get("SELECT * FROM billing_periods WHERE id=?", [+req.params.periodId]);
+  if (period && period.status === 'finalized') return res.status(403).json({ error: 'Cannot generate invoices for a finalized period' });
   const tenants = all("SELECT * FROM tenants WHERE is_active=1 AND is_placeholder=0");
   const results = [];
   for (const t of tenants) {
