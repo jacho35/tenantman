@@ -174,6 +174,34 @@ async function qboRequest(method, endpoint, body = null) {
   return data;
 }
 
+// Query QBO tax codes to find the standard VAT code
+async function findTaxCode() {
+  // Check if we have a cached tax code ID
+  const cached = get("SELECT value FROM settings WHERE key = 'qbo_tax_code_id'");
+  if (cached && cached.value) return cached.value;
+
+  try {
+    const data = await qboRequest('GET', '/query?query=' + encodeURIComponent("SELECT * FROM TaxCode WHERE Active = true MAXRESULTS 100"));
+    const taxCodes = data.QueryResponse?.TaxCode || [];
+    console.log('[QBO] Available tax codes:', taxCodes.map(t => `${t.Id}: ${t.Name}`).join(', '));
+    // Look for a tax code that represents standard VAT (not exempt/zero-rated)
+    const standard = taxCodes.find(t => t.Name === 'Standard' || t.Name === 'TAX' || t.Name === 'VAT');
+    if (standard) {
+      run("INSERT INTO settings (key, value, updated_at) VALUES ('qbo_tax_code_id', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')", [standard.Id]);
+      return standard.Id;
+    }
+    // Fall back to any taxable code (not NON or exempt)
+    const taxable = taxCodes.find(t => t.Name !== 'NON' && t.Name !== 'Exempt' && t.Name !== 'Non');
+    if (taxable) {
+      run("INSERT INTO settings (key, value, updated_at) VALUES ('qbo_tax_code_id', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')", [taxable.Id]);
+      return taxable.Id;
+    }
+  } catch (e) {
+    console.error('[QBO] Failed to query tax codes:', e.message);
+  }
+  return null;
+}
+
 // Query QBO customers
 async function queryCustomers() {
   const data = await qboRequest('GET', '/query?query=' + encodeURIComponent("SELECT * FROM Customer WHERE Active = true MAXRESULTS 1000"));
@@ -235,7 +263,7 @@ async function findOrCreateCustomer(tenant) {
 }
 
 // Build a QBO invoice from local line items
-function buildQboInvoice(customer, lineItems, period, tenant) {
+function buildQboInvoice(customer, lineItems, period, tenant, taxCodeId) {
   const vatRate = parseFloat(get("SELECT value FROM settings WHERE key = 'vat_rate'")?.value || '15');
   const settings_data = {};
   all("SELECT * FROM settings").forEach(r => settings_data[r.key] = r.value);
@@ -247,6 +275,7 @@ function buildQboInvoice(customer, lineItems, period, tenant) {
     // Recalculate UnitPrice from amount/qty to avoid rounding mismatch
     const unitPrice = qty !== 0 ? parseFloat((amount / qty).toFixed(2)) : amount;
     const calcAmount = parseFloat((unitPrice * qty).toFixed(2));
+    const taxRef = taxCodeId ? { TaxCodeRef: { value: taxCodeId } } : {};
     // If there's still a rounding difference, use qty=1 with amount as unit price
     if (calcAmount !== amount) {
       return {
@@ -256,6 +285,7 @@ function buildQboInvoice(customer, lineItems, period, tenant) {
         SalesItemLineDetail: {
           UnitPrice: amount,
           Qty: 1,
+          ...taxRef,
         },
       };
     }
@@ -266,14 +296,20 @@ function buildQboInvoice(customer, lineItems, period, tenant) {
       SalesItemLineDetail: {
         UnitPrice: unitPrice,
         Qty: qty,
+        ...taxRef,
       },
     };
   });
+
+  // Calculate due date: last day of the billing month
+  const lastDay = new Date(period.year, period.month, 0); // day 0 of next month = last day of this month
+  const dueDate = lastDay.toISOString().split('T')[0];
 
   const invoice = {
     CustomerRef: { value: customer.Id },
     Line: lines,
     TxnDate: period.current_reading_date || new Date().toISOString().split('T')[0],
+    DueDate: dueDate,
     PrivateNote: `Tenantman - ${period.billing_month_label} - Unit ${tenant.unit_number}`,
     CustomerMemo: { value: `Invoice for ${period.billing_month_label}` },
   };
@@ -296,13 +332,17 @@ async function pushInvoice(tenantId, billingPeriodId) {
     throw new Error(`Invoice already pushed to QuickBooks (QBO Invoice #${existing.qbo_invoice_id})`);
   }
 
+  // Find tax code for standard VAT
+  const taxCodeId = await findTaxCode();
+  console.log(`[QBO Push] Tax code ID: ${taxCodeId || 'none found'}`);
+
   // Find or create QBO customer
   console.log(`[QBO Push] Finding/creating customer for tenant ${tenant.id} (Unit ${tenant.unit_number} - ${tenant.name})`);
   const customer = await findOrCreateCustomer(tenant);
   console.log(`[QBO Push] Customer matched: QBO ID ${customer.Id} (${customer.DisplayName})`);
 
   // Build and push invoice
-  const qboInvoice = buildQboInvoice(customer, lineItems, period, tenant);
+  const qboInvoice = buildQboInvoice(customer, lineItems, period, tenant, taxCodeId);
   console.log(`[QBO Push] Pushing invoice with ${lineItems.length} line items`);
   const result = await qboRequest('POST', '/invoice', qboInvoice);
 
