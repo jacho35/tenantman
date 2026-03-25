@@ -133,4 +133,178 @@ router.post('/calculate-water', (req, res) => {
   res.json(calculateWaterBill(usage_kl, tsId));
 });
 
+// ===== REPORTING ENDPOINTS =====
+
+// Monthly billing summary - totals and per-tenant breakdown
+router.get('/reports/billing-summary', (req, res) => {
+  const { period_id } = req.query;
+  const vatRate = parseFloat(get("SELECT value FROM settings WHERE key='vat_rate'")?.value || '15') / 100;
+
+  if (period_id) {
+    // Single period summary
+    const period = get("SELECT * FROM billing_periods WHERE id=?", [+period_id]);
+    if (!period) return res.status(404).json({ error: 'Period not found' });
+    const tenantBreakdown = all(`
+      SELECT t.id as tenant_id, t.name, t.unit_number,
+        COALESCE(SUM(li.amount), 0) as subtotal
+      FROM tenants t
+      LEFT JOIN invoice_line_items li ON li.tenant_id = t.id AND li.billing_period_id = ?
+      WHERE t.is_active = 1 AND t.is_placeholder = 0
+      GROUP BY t.id ORDER BY t.unit_number
+    `, [+period_id]);
+
+    const grandSubtotal = tenantBreakdown.reduce((s, t) => s + t.subtotal, 0);
+    res.json({
+      period,
+      tenants: tenantBreakdown.map(t => ({
+        ...t,
+        tax: t.subtotal * vatRate,
+        total: t.subtotal * (1 + vatRate)
+      })),
+      grandSubtotal,
+      grandTax: grandSubtotal * vatRate,
+      grandTotal: grandSubtotal * (1 + vatRate),
+      vatRate
+    });
+  } else {
+    // All periods summary
+    const periods = all("SELECT * FROM billing_periods ORDER BY year DESC, month DESC");
+    const summaries = periods.map(p => {
+      const subtotal = get("SELECT COALESCE(SUM(amount),0) as total FROM invoice_line_items WHERE billing_period_id=?", [p.id])?.total || 0;
+      return {
+        ...p,
+        subtotal,
+        tax: subtotal * vatRate,
+        total: subtotal * (1 + vatRate),
+        tenant_count: get("SELECT COUNT(DISTINCT tenant_id) as c FROM invoice_line_items WHERE billing_period_id=?", [p.id])?.c || 0
+      };
+    });
+    res.json({ periods: summaries, vatRate });
+  }
+});
+
+// Water usage trends per tenant (all periods)
+router.get('/reports/water-trends', (req, res) => {
+  const readings = all(`
+    SELECT mr.tenant_id, t.name, t.unit_number,
+      bp.id as period_id, bp.year, bp.month, bp.billing_month_label,
+      mr.usage_kl, mr.calculated_amount,
+      mr.previous_reading, mr.current_reading
+    FROM meter_readings mr
+    JOIN tenants t ON mr.tenant_id = t.id
+    JOIN billing_periods bp ON mr.billing_period_id = bp.id
+    WHERE mr.meter_type = 'water' AND t.is_active = 1
+    ORDER BY t.unit_number, bp.year, bp.month
+  `);
+
+  // Group by tenant
+  const byTenant = {};
+  for (const r of readings) {
+    if (!byTenant[r.tenant_id]) {
+      byTenant[r.tenant_id] = { tenant_id: r.tenant_id, name: r.name, unit_number: r.unit_number, readings: [] };
+    }
+    byTenant[r.tenant_id].readings.push({
+      period_id: r.period_id, year: r.year, month: r.month,
+      label: r.billing_month_label, usage_kl: r.usage_kl,
+      cost: r.calculated_amount, previous_reading: r.previous_reading,
+      current_reading: r.current_reading
+    });
+  }
+  res.json(Object.values(byTenant));
+});
+
+// Payment aging / outstanding balance tracking
+router.get('/reports/aging', (req, res) => {
+  const vatRate = parseFloat(get("SELECT value FROM settings WHERE key='vat_rate'")?.value || '15') / 100;
+  const tenantList = all("SELECT * FROM tenants WHERE is_active=1 AND is_placeholder=0 ORDER BY unit_number");
+  const periods = all("SELECT * FROM billing_periods ORDER BY year DESC, month DESC");
+
+  const aging = tenantList.map(t => {
+    const invoices = periods.map(p => {
+      const subtotal = get("SELECT COALESCE(SUM(amount),0) as total FROM invoice_line_items WHERE billing_period_id=? AND tenant_id=?", [p.id, t.id])?.total || 0;
+      if (subtotal === 0) return null;
+      const total = subtotal * (1 + vatRate);
+      // Check QBO push status
+      const pushStatus = get("SELECT status, qbo_doc_number FROM qbo_invoice_push WHERE billing_period_id=? AND tenant_id=?", [p.id, t.id]);
+      return {
+        period_id: p.id,
+        label: p.billing_month_label,
+        year: p.year, month: p.month,
+        subtotal, tax: subtotal * vatRate, total,
+        status: p.status,
+        qbo_status: pushStatus?.status || 'not_pushed',
+        qbo_doc: pushStatus?.qbo_doc_number || null
+      };
+    }).filter(Boolean);
+
+    const totalOutstanding = invoices.reduce((s, inv) => s + inv.total, 0);
+
+    // Age buckets: current (latest period), 30 days, 60 days, 90+ days
+    const now = new Date();
+    const current = invoices[0]?.total || 0;
+    const days30 = invoices[1]?.total || 0;
+    const days60 = invoices[2]?.total || 0;
+    const days90plus = invoices.slice(3).reduce((s, inv) => s + inv.total, 0);
+
+    return {
+      tenant_id: t.id, name: t.name, unit_number: t.unit_number,
+      invoices, totalOutstanding, current, days30, days60, days90plus
+    };
+  });
+
+  res.json({ aging, vatRate });
+});
+
+// Variance report - month-over-month changes
+router.get('/reports/variance', (req, res) => {
+  const vatRate = parseFloat(get("SELECT value FROM settings WHERE key='vat_rate'")?.value || '15') / 100;
+  const periods = all("SELECT * FROM billing_periods ORDER BY year ASC, month ASC");
+  if (periods.length < 2) return res.json({ periods: [], variance: [] });
+
+  const tenantList = all("SELECT * FROM tenants WHERE is_active=1 AND is_placeholder=0 ORDER BY unit_number");
+
+  // Build per-period, per-tenant totals
+  const periodData = periods.map(p => {
+    const tenantTotals = {};
+    let periodSubtotal = 0;
+    for (const t of tenantList) {
+      const subtotal = get("SELECT COALESCE(SUM(amount),0) as total FROM invoice_line_items WHERE billing_period_id=? AND tenant_id=?", [p.id, t.id])?.total || 0;
+      tenantTotals[t.id] = subtotal;
+      periodSubtotal += subtotal;
+    }
+    // Water usage totals
+    const waterTotal = get("SELECT COALESCE(SUM(usage_kl),0) as total FROM meter_readings WHERE billing_period_id=? AND meter_type='water'", [p.id])?.total || 0;
+    return { ...p, tenantTotals, subtotal: periodSubtotal, total: periodSubtotal * (1 + vatRate), waterUsageTotal: waterTotal };
+  });
+
+  // Compute variance between consecutive periods
+  const variance = [];
+  for (let i = 1; i < periodData.length; i++) {
+    const prev = periodData[i - 1];
+    const curr = periodData[i];
+    const tenantVariance = tenantList.map(t => {
+      const prevAmt = prev.tenantTotals[t.id] || 0;
+      const currAmt = curr.tenantTotals[t.id] || 0;
+      const change = currAmt - prevAmt;
+      const pctChange = prevAmt > 0 ? ((change / prevAmt) * 100) : (currAmt > 0 ? 100 : 0);
+      return { tenant_id: t.id, name: t.name, unit_number: t.unit_number, prevAmount: prevAmt, currAmount: currAmt, change, pctChange };
+    });
+
+    const totalChange = curr.subtotal - prev.subtotal;
+    const totalPctChange = prev.subtotal > 0 ? ((totalChange / prev.subtotal) * 100) : 0;
+    const waterChange = curr.waterUsageTotal - prev.waterUsageTotal;
+    const waterPctChange = prev.waterUsageTotal > 0 ? ((waterChange / prev.waterUsageTotal) * 100) : 0;
+
+    variance.push({
+      prevPeriod: { id: prev.id, label: prev.billing_month_label, subtotal: prev.subtotal, total: prev.total },
+      currPeriod: { id: curr.id, label: curr.billing_month_label, subtotal: curr.subtotal, total: curr.total },
+      totalChange, totalPctChange,
+      waterChange, waterPctChange,
+      tenantVariance
+    });
+  }
+
+  res.json({ periods: periodData.map(p => ({ id: p.id, label: p.billing_month_label, subtotal: p.subtotal, total: p.total, waterUsageTotal: p.waterUsageTotal })), variance: variance.reverse(), vatRate });
+});
+
 module.exports = router;
